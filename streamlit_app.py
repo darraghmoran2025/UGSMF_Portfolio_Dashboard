@@ -2,7 +2,7 @@
 Student Managed Fund (SMF) Portfolio Dashboard.
 
 Tab 1 — Portfolio Performance: read a CSV of stock prices, derive sector
-weights, returns, contributions, and benchmark comparisons.
+weights, returns, contributions, and benchmark comparisons (MSCI World).
 
 Tab 2 — Options Strategy & Risk Engine: Black-Scholes pricing, multi-leg
 strategy builder (with presets), payoff diagram, volatility stress test,
@@ -10,17 +10,22 @@ and a 2D risk heatmap (price × time decay).
 
 Accepted CSV format (matches stock_performance_*.csv exports):
 
-    Ticker,Company,Exchange,Price_<DDMmmYYYY>,Price_<DDMmmYYYY>,Yahoo_Finance_URL
-    HON,Honeywell International,Nasdaq,239.08,194.73,https://finance.yahoo.com/quote/HON/history/
+    Sector,Ticker,Company,Exchange,Price_<DDMmmYYYY>,Price_<DDMmmYYYY>,Yahoo_Finance_URL
+    Industrials,HON,Honeywell International,NASDAQ / USD,213.17,194.73,https://...
     ...
-    MSCI World Index,,,4437.08,4322.9,
+    Benchmark,MSCI World Index,,,4609,4322.9,
+
+Multi-batch portfolios are supported via separator rows that override the
+start date for subsequent rows, e.g. ",,,,,Price_2Mar2026," tells the
+parser that all rows that follow were acquired on 2 March 2026.
 """
 
 import base64
+import csv
 import io
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +34,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from scipy.stats import norm
+
+try:
+    import yfinance as yf
+    _HAS_YFINANCE = True
+except ImportError:  # pragma: no cover - optional dependency
+    yf = None
+    _HAS_YFINANCE = False
 
 # ---------------------------------------------------------------------------
 # Page setup
@@ -51,13 +63,65 @@ BRAND_COLORWAY = [
     "#6b6157",
 ]
 
+
+def _palette(dark: bool) -> dict:
+    """Return the colour tokens used by both the CSS theme and Plotly figures."""
+    if dark:
+        return {
+            "APP_BG": "#13100c",
+            "PANEL_BG": "#221c15",
+            "SIDEBAR_BG": "#1a1510",
+            "CARD_BG": "#221c15",
+            "TEXT": "#f7f1e7",
+            "TEXT_MUTED": "#c9bfae",
+            "BORDER": "#3a322a",
+            "BORDER_SOFT": "#2a241c",
+            "GRID": "#3a322a",
+            "ZERO": "#5a5045",
+            "PLOTLY_TEMPLATE": "plotly_dark",
+            "MAROON": BRAND_MAROON,
+            "MAROON_DEEP": BRAND_MAROON_DEEP,
+            "GOLD": BRAND_GOLD,
+            "POSITIVE": "#3fb273",
+        }
+    return {
+        "APP_BG": "#ffffff",
+        "PANEL_BG": "#ffffff",
+        "SIDEBAR_BG": "#fbf7f0",
+        "CARD_BG": "#ffffff",
+        "TEXT": BRAND_INK,
+        "TEXT_MUTED": "#6b6157",
+        "BORDER": "#e3dccf",
+        "BORDER_SOFT": "#efe9dc",
+        "GRID": "#e3dccf",
+        "ZERO": "#c9bfae",
+        "PLOTLY_TEMPLATE": "plotly_white",
+        "MAROON": BRAND_MAROON,
+        "MAROON_DEEP": BRAND_MAROON_DEEP,
+        "GOLD": BRAND_GOLD,
+        "POSITIVE": "#1f7a3a",
+    }
+
+
 st.set_page_config(
     page_title="UGSMF Portfolio Dashboard",
     page_icon=str(FAVICON_PATH) if FAVICON_PATH.exists() else ":chart_with_upwards_trend:",
     layout="wide",
 )
 
-# University of Galway SMF brand styling
+# Initialise theme state up-front so the CSS block below reflects the toggle.
+if "dark_mode" not in st.session_state:
+    st.session_state["dark_mode"] = False
+st.sidebar.toggle("🌙 Night mode", key="dark_mode")
+DARK = bool(st.session_state["dark_mode"])
+PALETTE = _palette(DARK)
+PLOTLY_TEMPLATE = PALETTE["PLOTLY_TEMPLATE"]
+
+# University of Galway SMF brand styling — palette is theme-aware.
+_HEADER_TEXT_COLOR = "#f7f1e7" if DARK else BRAND_INK
+_SIDEBAR_HEADER = PALETTE["GOLD"] if DARK else BRAND_MAROON_DEEP
+_FOOTER_LINK = PALETTE["GOLD"] if DARK else BRAND_MAROON_DEEP
+
 st.markdown(
     f"""
     <style>
@@ -66,6 +130,19 @@ st.markdown(
       html, body, [class*="css"] {{
           font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif;
       }}
+
+      [data-testid="stAppViewContainer"], [data-testid="stMain"] {{
+          background: {PALETTE["APP_BG"]};
+          color: {PALETTE["TEXT"]};
+      }}
+      [data-testid="stHeader"] {{
+          background: {PALETTE["APP_BG"]};
+      }}
+      .stMarkdown, .stMarkdown p, .stMarkdown li, .stCaption, label, .stRadio label,
+      .stCheckbox label, .stSelectbox label, .stNumberInput label, .stSlider label {{
+          color: {PALETTE["TEXT"]};
+      }}
+      .stMarkdown small, .stCaption {{ color: {PALETTE["TEXT_MUTED"]}; }}
 
       .ugsmf-banner {{
           align-items: center;
@@ -114,23 +191,24 @@ st.markdown(
           width: 90px;
       }}
 
-      h1, h2, h3 {{ letter-spacing: -0.01em; }}
+      h1, h2, h3, h4 {{ letter-spacing: -0.01em; color: {_HEADER_TEXT_COLOR}; }}
 
       div[data-testid="stMetric"] {{
-          background: #ffffff;
-          border: 1px solid #e3dccf;
+          background: {PALETTE["CARD_BG"]};
+          border: 1px solid {PALETTE["BORDER"]};
           border-radius: 10px;
           border-top: 3px solid {BRAND_MAROON};
-          box-shadow: 0 1px 2px rgba(26, 20, 16, 0.04);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
           padding: 14px 16px;
       }}
       div[data-testid="stMetricLabel"] {{
-          color: #6b6157;
+          color: {PALETTE["TEXT_MUTED"]};
           font-size: 0.74rem !important;
           font-weight: 600;
           letter-spacing: 0.08em;
           text-transform: uppercase;
       }}
+      div[data-testid="stMetricValue"] {{ color: {PALETTE["TEXT"]}; }}
 
       .stButton > button, .stDownloadButton > button {{
           background: {BRAND_MAROON};
@@ -147,40 +225,54 @@ st.markdown(
       }}
 
       .stTabs [data-baseweb="tab-list"] {{
-          border-bottom: 1px solid #c9bfae;
+          border-bottom: 1px solid {PALETTE["BORDER"]};
           gap: 4px;
       }}
       .stTabs [data-baseweb="tab"] {{
-          color: #6b6157;
+          color: {PALETTE["TEXT_MUTED"]};
           font-weight: 600;
           letter-spacing: 0.02em;
       }}
       .stTabs [aria-selected="true"] {{
-          color: {BRAND_MAROON_DEEP} !important;
+          color: {PALETTE["GOLD"] if DARK else BRAND_MAROON_DEEP} !important;
           border-bottom-color: {BRAND_MAROON} !important;
       }}
 
       section[data-testid="stSidebar"] {{
-          background: #fbf7f0;
-          border-right: 1px solid #e3dccf;
+          background: {PALETTE["SIDEBAR_BG"]};
+          border-right: 1px solid {PALETTE["BORDER"]};
       }}
+      section[data-testid="stSidebar"] * {{ color: {PALETTE["TEXT"]}; }}
       section[data-testid="stSidebar"] h2,
       section[data-testid="stSidebar"] h3 {{
-          color: {BRAND_MAROON_DEEP};
+          color: {_SIDEBAR_HEADER};
       }}
 
+      div[data-testid="stExpander"] {{
+          background: {PALETTE["CARD_BG"]};
+          border: 1px solid {PALETTE["BORDER_SOFT"]};
+          border-radius: 8px;
+      }}
+      div[data-testid="stExpander"] summary {{ color: {PALETTE["TEXT"]}; }}
+
+      input, textarea, [data-baseweb="input"], [data-baseweb="select"] {{
+          color: {PALETTE["TEXT"]} !important;
+      }}
+
+      .ugsmf-allocation-presets {{ display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }}
+
       .ugsmf-footer {{
-          border-top: 1px solid #e3dccf;
-          color: #6b6157;
+          border-top: 1px solid {PALETTE["BORDER"]};
+          color: {PALETTE["TEXT_MUTED"]};
           font-size: 0.82rem;
           margin-top: 24px;
           padding-top: 18px;
       }}
-      .ugsmf-footer strong {{ color: {BRAND_INK}; }}
-      .ugsmf-footer a {{ color: {BRAND_MAROON_DEEP}; text-decoration: none; }}
+      .ugsmf-footer strong {{ color: {PALETTE["TEXT"]}; }}
+      .ugsmf-footer a {{ color: {_FOOTER_LINK}; text-decoration: none; }}
       .ugsmf-footer a:hover {{ text-decoration: underline; }}
       .ugsmf-footer .disclaimer {{
-          border-top: 1px dashed #e3dccf;
+          border-top: 1px dashed {PALETTE["BORDER"]};
           font-size: 0.76rem;
           margin-top: 12px;
           padding-top: 12px;
@@ -253,33 +345,54 @@ SECTORS = [
 ]
 BASELINE_WEIGHT = 100.0 / len(SECTORS)
 
+# Legacy lookup — only used if a CSV omits the Sector column.
 TICKER_TO_SECTOR = {
     "HON":     "Industrials",
+    "ATEX":    "Industrials",
     "MU":      "Technology",
+    "INOD":    "Technology",
     "BBIO":    "Healthcare",
+    "VRTX":    "Healthcare",
     "WPM":     "Real Assets",
+    "XOM":     "Real Assets",
     "NEM":     "Alternative Assets",
+    "FCX":     "Alternative Assets",
     "BYD":     "Consumer",
+    "BYDDF":   "Consumer",
+    "PG":      "Consumer",
     "1211.HK": "Consumer",
     "ALIZY":   "Financials",
     "ALV.DE":  "Financials",
+    "V":       "Financials",
 }
 
 BENCHMARK_NAME_DEFAULT = "MSCI World Index"
 BENCHMARK_START_DEFAULT = 4322.90
-BENCHMARK_END_DEFAULT = 4437.08
+BENCHMARK_END_DEFAULT = 4609.00
 PERIOD_START_DEFAULT = "2025-10-20"
-PERIOD_END_DEFAULT = "2026-03-11"
+PERIOD_END_DEFAULT = "2026-04-24"
 
-EMBEDDED_CSV = """Ticker,Company,Exchange,Price_11Mar2026,Price_20Oct2025,Yahoo_Finance_URL
-HON,Honeywell International,Nasdaq,239.08,194.73,https://finance.yahoo.com/quote/HON/history/
-MU,Micron Technology,Nasdaq,98.15,102.9,https://finance.yahoo.com/quote/MU/history/
-BBIO,BridgeBio Pharma,Nasdaq,414.24,198.47,https://finance.yahoo.com/quote/BBIO/history/
-WPM,Wheaton Precious Metals,NYSE,73.14,53.24,https://finance.yahoo.com/quote/WPM/history/
-NEM,Newmont Corporation,NYSE,147,97.13,https://finance.yahoo.com/quote/NEM/history/
-1211.HK,BYD,HKEX,115.26,87.01,https://finance.yahoo.com/quote/1211.HK/history/
-ALV.DE,Allianz SE,Xetra,350.8,351.7,https://finance.yahoo.com/quote/ALV.DE/history/
-MSCI World Index,,,4437.08,4322.9,
+# Yahoo Finance ticker for MSCI World USD price return, plus an ETF fallback.
+MSCI_WORLD_TICKER = "^990100-USD-STRD"
+MSCI_WORLD_PROXY_TICKER = "URTH"
+
+EMBEDDED_CSV = """Sector,Ticker,Company,Exchange,Price_24Apr2026,Price_20Oct2025,Yahoo_Finance_URL
+Industrials,HON,Honeywell International,NASDAQ / USD,213.17,194.73,https://finance.yahoo.com/quote/HON/history/
+Consumer,BYDDF,BYD Co. Ltd.,OTC / USD,99.46,102.9,https://finance.yahoo.com/quote/BYDDF/history/
+Technology,MU,Micron Technology,NASDAQ / USD,496.72,198.47,https://finance.yahoo.com/quote/MU/history/
+Healthcare,BBIO,BridgeBio Pharma,NASDAQ / USD,73.28,53.24,https://finance.yahoo.com/quote/BBIO/history/
+Real Assets,WPM,Wheaton Precious Metals,NYSE / USD,139.44,97.13,https://finance.yahoo.com/quote/WPM/history/
+Alternative Assets,NEM,Newmont Corporation,NYSE / USD,120.7,87.01,https://finance.yahoo.com/quote/NEM/history/
+Financials,ALIZY,Allianz SE ADR,OTC ADR / USD,388,351.7,https://finance.yahoo.com/quote/ALIZY/history/
+,,,,,Price_2Mar2026,
+Industrials,ATEX,Anterix,NASDAQ / USD,45.17,37.2,https://stockanalysis.com/stocks/atex/history/
+Consumer,PG,Procter & Gamble,NYSE / USD,148.18,163.51,https://stockanalysis.com/stocks/pg/history/
+Technology,INOD,Innodata,NASDAQ / USD,42.34,44.46,https://stockanalysis.com/stocks/inod/history/
+Healthcare,VRTX,Vertex Pharmaceuticals,NASDAQ / USD,430.29,486.03,https://stockanalysis.com/stocks/vrtx/history/
+Real Assets,XOM,ExxonMobil,NYSE / USD,148.91,154.22,https://stockanalysis.com/stocks/xom/history/
+Alternative Assets,FCX,Freeport-McMoRan,NYSE / USD,61.05,68.08,https://stockanalysis.com/stocks/fcx/history/
+Financials,V,Visa,NYSE / USD,309.42,320.51,https://stockanalysis.com/stocks/v/history/
+Benchmark,MSCI World Index,,,4609,4322.9,
 """
 
 
@@ -309,8 +422,16 @@ def _parse_date_from_col(col: str) -> datetime | None:
     return None
 
 
+def _split_csv_row(line: str) -> list[str]:
+    return next(csv.reader([line]))
+
+
 def _clean_dataframe(raw_text: str) -> tuple[pd.DataFrame, str, str]:
     lines = raw_text.splitlines()
+    if not lines:
+        return pd.DataFrame(), PERIOD_START_DEFAULT, PERIOD_END_DEFAULT
+
+    # Locate the column header row.
     header_idx = 0
     for i, line in enumerate(lines):
         lowered = line.lower()
@@ -318,46 +439,101 @@ def _clean_dataframe(raw_text: str) -> tuple[pd.DataFrame, str, str]:
             header_idx = i
             break
 
-    df = pd.read_csv(io.StringIO("\n".join(lines[header_idx:])))
-    df.columns = [c.strip().replace(" ", "_") for c in df.columns]
+    header_fields = [c.strip().replace(" ", "_") for c in _split_csv_row(lines[header_idx])]
 
-    for col in df.select_dtypes(include="object").columns:
-        df[col] = df[col].astype(str).str.strip().replace({"nan": np.nan, "": np.nan})
+    # Map every dated price column to its parsed date.
+    date_to_col: dict[datetime, str] = {}
+    for col in header_fields:
+        if col.lower().startswith("price_"):
+            d = _parse_date_from_col(col)
+            if d is not None:
+                date_to_col[d] = col
 
-    period_start = PERIOD_START_DEFAULT
-    period_end = PERIOD_END_DEFAULT
-    if "Price_Start" not in df.columns or "Price_End" not in df.columns:
-        dated = []
-        for col in df.columns:
-            if col.lower().startswith("price_"):
-                d = _parse_date_from_col(col)
-                if d is not None:
-                    dated.append((d, col))
-        if len(dated) >= 2:
-            dated.sort()
-            start_date, start_col = dated[0]
-            end_date, end_col = dated[-1]
-            period_start = start_date.strftime("%Y-%m-%d")
-            period_end = end_date.strftime("%Y-%m-%d")
-            renames = {}
-            if start_col != "Price_Start":
-                renames[start_col] = "Price_Start"
-            if end_col != "Price_End":
-                renames[end_col] = "Price_End"
-            if renames:
-                df = df.rename(columns=renames)
+    sorted_dates = sorted(date_to_col.items())
+    initial_start_date, initial_start_col = sorted_dates[0] if sorted_dates else (None, None)
+    end_date, end_col = sorted_dates[-1] if sorted_dates else (None, None)
 
-    for col in ("Price_Start", "Price_End", "Weight", "Return", "Contribution"):
+    ticker_idx = header_fields.index("Ticker") if "Ticker" in header_fields else 1
+
+    # Walk body rows. A separator row carries no Ticker but holds a "Price_<date>"
+    # token in one of its cells — that token rebases the start date for every
+    # holding row that follows.
+    current_start_date = initial_start_date
+    current_start_col = initial_start_col
+    earliest_start = initial_start_date
+    body_rows: list[list[str]] = []
+    row_start_dates: list[datetime | None] = []
+    row_start_cols: list[str | None] = []
+
+    for raw in lines[header_idx + 1:]:
+        if not raw.strip():
+            continue
+        try:
+            fields = _split_csv_row(raw)
+        except csv.Error:
+            continue
+        fields = [(f or "").strip() for f in fields]
+        # Right-pad to header width.
+        if len(fields) < len(header_fields):
+            fields = fields + [""] * (len(header_fields) - len(fields))
+
+        ticker_val = fields[ticker_idx] if ticker_idx < len(fields) else ""
+
+        if not ticker_val or ticker_val.lower() == "nan":
+            new_date = None
+            for cell_idx, cell in enumerate(fields):
+                if cell.lower().startswith("price_"):
+                    candidate = _parse_date_from_col(cell)
+                    if candidate is not None:
+                        new_date = candidate
+                        if cell_idx < len(header_fields):
+                            current_start_col = header_fields[cell_idx]
+                        break
+            if new_date is not None:
+                current_start_date = new_date
+                if earliest_start is None or new_date < earliest_start:
+                    earliest_start = new_date
+            continue  # skip both separators and blank rows
+
+        body_rows.append(fields)
+        row_start_dates.append(current_start_date)
+        row_start_cols.append(current_start_col)
+
+    df = pd.DataFrame(body_rows, columns=header_fields)
+    df["_RowStartDate"] = row_start_dates
+    df["_RowStartCol"] = row_start_cols
+
+    for col in df.columns:
+        if df[col].dtype == object:
+            df[col] = df[col].astype(str).str.strip().replace({"nan": np.nan, "": np.nan})
+
+    # Coerce every dated price column to numeric.
+    for col in list(date_to_col.values()):
+        df[col] = pd.to_numeric(
+            df[col].astype(str).str.replace("$", "", regex=False).str.replace(",", "", regex=False),
+            errors="coerce",
+        )
+
+    # Per-row Price_Start (looked up via the row's own batch start column).
+    def _start_price(row: pd.Series) -> float:
+        col = row.get("_RowStartCol")
+        if not col:
+            return np.nan
+        val = row.get(col)
+        return float(val) if pd.notna(val) else np.nan
+
+    df["Price_Start"] = df.apply(_start_price, axis=1)
+    if end_col:
+        df["Price_End"] = pd.to_numeric(df[end_col], errors="coerce")
+    elif "Price_End" not in df.columns:
+        df["Price_End"] = np.nan
+
+    for col in ("Weight", "Return", "Contribution"):
         if col in df.columns:
-            df[col] = (
-                df[col]
-                .astype(str)
-                .str.replace("$", "", regex=False)
-                .str.replace(",", "", regex=False)
-                .str.replace("%", "", regex=False)
-                .str.strip()
+            df[col] = pd.to_numeric(
+                df[col].astype(str).str.replace("$", "", regex=False).str.replace(",", "", regex=False).str.replace("%", "", regex=False),
+                errors="coerce",
             )
-            df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.dropna(subset=["Ticker"]).reset_index(drop=True)
 
@@ -373,24 +549,27 @@ def _clean_dataframe(raw_text: str) -> tuple[pd.DataFrame, str, str]:
     if "Company" not in df.columns:
         df["Company"] = df["Ticker"]
 
+    sector_str = df["Sector"].astype(str) if "Sector" in df.columns else pd.Series([""] * len(df))
     ticker_str = df["Ticker"].astype(str)
     bench_mask = (
-        ticker_str.str.contains("MSCI", case=False, na=False)
+        sector_str.str.lower().eq("benchmark")
+        | ticker_str.str.contains("MSCI", case=False, na=False)
         | ticker_str.str.contains("Index", case=False, na=False)
     )
 
     if "Sector" not in df.columns:
         df["Sector"] = df["Ticker"].map(TICKER_TO_SECTOR)
+    else:
+        missing = df["Sector"].isna() & ~bench_mask
+        if missing.any():
+            df.loc[missing, "Sector"] = df.loc[missing, "Ticker"].map(TICKER_TO_SECTOR)
     df.loc[bench_mask, "Sector"] = "Benchmark"
     df["Sector"] = df["Sector"].fillna("Other")
 
     return_was_computed = False
     if "Return" not in df.columns or df["Return"].isna().all():
-        if "Price_Start" in df.columns and "Price_End" in df.columns:
-            df["Return"] = (df["Price_End"] - df["Price_Start"]) / df["Price_Start"]
-            return_was_computed = True
-        else:
-            df["Return"] = 0.0
+        df["Return"] = (df["Price_End"] - df["Price_Start"]) / df["Price_Start"]
+        return_was_computed = True
 
     weight_was_computed = False
     if "Weight" not in df.columns or df["Weight"].isna().all():
@@ -409,6 +588,13 @@ def _clean_dataframe(raw_text: str) -> tuple[pd.DataFrame, str, str]:
 
     if "Contribution" not in df.columns or df["Contribution"].isna().all():
         df["Contribution"] = df["Weight"] * df["Return"]
+
+    period_start = (earliest_start or initial_start_date).strftime("%Y-%m-%d") if (earliest_start or initial_start_date) else PERIOD_START_DEFAULT
+    period_end = end_date.strftime("%Y-%m-%d") if end_date else PERIOD_END_DEFAULT
+
+    # Surface each row's actual buy date for the deep-dive panel.
+    df["Buy_Date"] = [d.strftime("%Y-%m-%d") if isinstance(d, datetime) else "" for d in df["_RowStartDate"]]
+    df = df.drop(columns=["_RowStartDate", "_RowStartCol"])
 
     return df, period_start, period_end
 
@@ -439,6 +625,54 @@ def _split_benchmark(df_all: pd.DataFrame) -> tuple[pd.DataFrame, str, float, fl
     start = float(b["Price_Start"]) if pd.notna(b.get("Price_Start")) else BENCHMARK_START_DEFAULT
     end = float(b["Price_End"]) if pd.notna(b.get("Price_End")) else BENCHMARK_END_DEFAULT
     return holdings, name, start, end
+
+
+@st.cache_data(ttl=600)
+def fetch_live_msci_world(period_start_iso: str) -> dict | None:
+    """Fetch live MSCI World data, falling back to an ETF proxy if needed.
+
+    Returns a dict with start_close, last_close, percent_return, last_timestamp,
+    and source ticker, or ``None`` if yfinance is unavailable / the request
+    fails. Cached for 10 minutes so the dashboard does not hammer Yahoo on
+    every interaction.
+    """
+    if not _HAS_YFINANCE:
+        return None
+    try:
+        period_start = datetime.fromisoformat(period_start_iso)
+    except ValueError:
+        return None
+    for ticker, source_name in (
+        (MSCI_WORLD_TICKER, "MSCI World Index"),
+        (MSCI_WORLD_PROXY_TICKER, "iShares MSCI World ETF proxy"),
+    ):
+        try:
+            hist = yf.Ticker(ticker).history(
+                start=period_start.strftime("%Y-%m-%d"),
+                interval="1d",
+                auto_adjust=False,
+            )
+        except Exception:  # pragma: no cover - network failure
+            continue
+        if hist is None or hist.empty or "Close" not in hist.columns:
+            continue
+        closes = hist["Close"].dropna()
+        if closes.empty:
+            continue
+        start_close = float(closes.iloc[0])
+        last_close = float(closes.iloc[-1])
+        if start_close <= 0:
+            continue
+        return {
+            "ticker": ticker,
+            "source_name": source_name,
+            "start_close": start_close,
+            "last_close": last_close,
+            "percent_return": (last_close / start_close) - 1.0,
+            "last_timestamp": closes.index[-1].to_pydatetime().astimezone(timezone.utc),
+            "start_date": closes.index[0].strftime("%Y-%m-%d"),
+        }
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -562,9 +796,9 @@ with st.container(border=True):
     st.markdown("### Upload Portfolio CSV")
     st.write(
         "Drop your CSV here to display the payoffs. "
-        "**Expected format:** `Ticker, Company, Exchange, Price_<DDMmmYYYY>, Price_<DDMmmYYYY>, Yahoo_Finance_URL` "
-        "(the two dated price columns may be in either order). Sectors, weights, returns, and contributions are derived. "
-        "Extra preamble rows (titles, dates) are auto-skipped."
+        "**Expected format:** `Sector, Ticker, Company, Exchange, Price_<DDMmmYYYY>, Price_<DDMmmYYYY>, Yahoo_Finance_URL` "
+        "with an optional `Benchmark,MSCI World Index,...` row. Separator rows such as `,,,,,Price_2Mar2026,` "
+        "rebase the buy date for subsequent holdings. Weights, returns, and contributions are derived when omitted."
     )
     uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"], label_visibility="collapsed")
     if uploaded_file is not None:
@@ -719,8 +953,31 @@ def _on_stock_num_change(sector: str, ticker: str) -> None:
     _rebalance_stocks_in_sector(sector, ticker, new_val)
 
 
+def _apply_stock_preset(sector: str, weights_pct: list[float]) -> None:
+    """Set within-sector stock weights to specific percentages (sum should be ~100)."""
+    sec_stocks = df[df["Sector"] == sector].reset_index(drop=True)
+    tickers = sec_stocks["Ticker"].tolist()
+    if not tickers:
+        return
+    if len(weights_pct) != len(tickers):
+        # Fall back to equal weight if the preset doesn't match the holding count.
+        weights_pct = [100.0 / len(tickers)] * len(tickers)
+    for tk, w in zip(tickers, weights_pct):
+        w_clamped = max(0.0, min(100.0, float(w)))
+        st.session_state[_stock_slider_key(tk)] = w_clamped
+        st.session_state[_stock_num_key(tk)] = w_clamped
+
+
+def _apply_sector_preset(weights_pct: dict[str, float]) -> None:
+    """Set every sector slider to the supplied percentage map."""
+    for s in SECTORS:
+        v = max(0.0, min(100.0, float(weights_pct.get(s, 0.0))))
+        st.session_state[_slider_key(s)] = v
+        st.session_state[_num_key(s)] = v
+
+
 st.sidebar.button(
-    "Reset to equal weight (1/7 each)",
+    f"Reset to equal weight (1/{len(SECTORS)} each)",
     on_click=_reset_to_equal_weight,
     use_container_width=True,
 )
@@ -747,10 +1004,11 @@ for sector in SECTORS:
 
     sector_stocks = df[df["Sector"] == sector].reset_index(drop=True)
     sector_cap_pct = float(st.session_state[_slider_key(sector)])
-    with st.sidebar.expander(f"Stocks in {sector} ({len(sector_stocks)})", expanded=False):
+    n_stocks = len(sector_stocks)
+    with st.sidebar.expander(f"Stocks in {sector} ({n_stocks})", expanded=True):
         if sector_stocks.empty:
             st.caption("No stocks in this sector in the loaded CSV.")
-        elif len(sector_stocks) == 1:
+        elif n_stocks == 1:
             only = sector_stocks.iloc[0]
             st.markdown(f"**{only['Ticker']}** — {only['Company']}")
             st.caption(
@@ -767,6 +1025,35 @@ for sector in SECTORS:
                 f"Within-sector shares (sum to 100% of the {sector} cap "
                 f"= {sector_cap_pct:.2f}% of portfolio)."
             )
+
+            # Allocation presets — quick ratios in addition to the slider/number-input pair.
+            if n_stocks == 2:
+                presets = [
+                    ("50/50", [50.0, 50.0]),
+                    ("60/40", [60.0, 40.0]),
+                    ("40/60", [40.0, 60.0]),
+                    ("100/0", [100.0, 0.0]),
+                    ("0/100", [0.0, 100.0]),
+                ]
+            else:
+                eq = 100.0 / n_stocks
+                presets = [(f"Equal ({eq:.1f}% each)", [eq] * n_stocks)]
+                # Single-stock-takes-all presets for each holding.
+                for i, tk in enumerate(sector_stocks["Ticker"].tolist()):
+                    weights = [0.0] * n_stocks
+                    weights[i] = 100.0
+                    presets.append((f"100% {tk}", weights))
+
+            preset_cols = st.columns(min(len(presets), 5))
+            for col_idx, (label, weights) in enumerate(presets):
+                preset_cols[col_idx % len(preset_cols)].button(
+                    label,
+                    key=f"stock_preset::{sector}::{label}",
+                    on_click=_apply_stock_preset,
+                    args=(sector, weights),
+                    use_container_width=True,
+                )
+
             for _, row in sector_stocks.iterrows():
                 tk = row["Ticker"]
                 share_pct = float(st.session_state[_stock_slider_key(tk)])
@@ -840,11 +1127,43 @@ with tab1:
     k1, k2, k3 = st.columns(3)
     k1.metric("Total Portfolio Return", f"{PORTFOLIO_RETURN * 100:.2f}%")
     k2.metric(
-        "Benchmark Return",
+        "Benchmark Return (CSV)",
         f"{BENCHMARK_RETURN * 100:.2f}%",
         help=f"{BENCHMARK_NAME}: ${BENCHMARK_START:,.2f} → ${BENCHMARK_END:,.2f}",
     )
     k3.metric("Alpha (Active Return)", f"{ALPHA * 100:+.2f}%", delta=f"{ALPHA * 100:+.2f}%")
+
+    # Live MSCI World data (Yahoo Finance via yfinance) — refreshed every 10 min.
+    live_msci = fetch_live_msci_world(period_start)
+    with st.container(border=True):
+        if live_msci is None:
+            if not _HAS_YFINANCE:
+                st.caption(
+                    "Live MSCI World feed unavailable — install `yfinance` (`pip install yfinance`) "
+                    "to enable real-time benchmark tracking."
+                )
+            else:
+                st.caption("Live MSCI World feed unavailable right now (Yahoo Finance returned no data).")
+        else:
+            live_pct = live_msci["percent_return"] * 100
+            ts_local = live_msci["last_timestamp"].strftime("%Y-%m-%d %H:%M UTC")
+            lm1, lm2, lm3, lm4 = st.columns(4)
+            lm1.metric(
+                f"Live {live_msci['source_name']} ({live_msci['ticker']})",
+                f"${live_msci['last_close']:,.2f}",
+                delta=f"{live_pct:+.2f}% since {live_msci['start_date']}",
+            )
+            lm2.metric(
+                "Live Alpha vs Portfolio",
+                f"{(PORTFOLIO_RETURN - live_msci['percent_return']) * 100:+.2f}%",
+                help="Portfolio return minus live MSCI World return over the same window.",
+            )
+            lm3.metric(
+                "Live vs CSV Benchmark",
+                f"{(live_msci['percent_return'] - BENCHMARK_RETURN) * 100:+.2f}%",
+                help="Difference between the live benchmark return and the static MSCI value reported in the CSV.",
+            )
+            lm4.metric("Last quote", ts_local)
 
     st.divider()
 
@@ -859,10 +1178,11 @@ with tab1:
             color_discrete_sequence=BRAND_COLORWAY,
         )
         donut.update_traces(textposition="inside", textinfo="percent+label",
-                            marker=dict(line=dict(color="#ffffff", width=2)))
+                            marker=dict(line=dict(color=PALETTE["APP_BG"], width=2)))
         donut.update_layout(
+            template=PLOTLY_TEMPLATE,
             showlegend=True, margin=dict(t=30, b=10, l=10, r=10),
-            font=dict(family="Inter, system-ui, sans-serif", color=BRAND_INK),
+            font=dict(family="Inter, system-ui, sans-serif", color=PALETTE["TEXT"]),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(donut, use_container_width=True)
@@ -887,10 +1207,11 @@ with tab1:
         waterfall.update_layout(
             yaxis_title="Contribution to Portfolio Return (%)",
             margin=dict(t=30, b=10, l=10, r=10), showlegend=False,
-            font=dict(family="Inter, system-ui, sans-serif", color=BRAND_INK),
+            template=PLOTLY_TEMPLATE,
+            font=dict(family="Inter, system-ui, sans-serif", color=PALETTE["TEXT"]),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(gridcolor="#e3dccf"),
-            yaxis=dict(gridcolor="#e3dccf", zerolinecolor="#c9bfae"),
+            xaxis=dict(gridcolor=PALETTE["GRID"]),
+            yaxis=dict(gridcolor=PALETTE["GRID"], zerolinecolor=PALETTE["ZERO"]),
         )
         st.plotly_chart(waterfall, use_container_width=True)
 
@@ -909,17 +1230,18 @@ with tab1:
         labels={"Return_pct": "Return (%)", "Above_Benchmark": "Beat Benchmark"},
     )
     bar.add_hline(
-        y=BENCHMARK_RETURN * 100, line_dash="dash", line_color=BRAND_INK,
+        y=BENCHMARK_RETURN * 100, line_dash="dash", line_color=PALETTE["TEXT_MUTED"],
         annotation_text=f"{BENCHMARK_NAME}: {BENCHMARK_RETURN * 100:.2f}%",
         annotation_position="top right",
     )
     bar.update_traces(textposition="outside")
     bar.update_layout(
         margin=dict(t=30, b=10, l=10, r=10), yaxis_title="Return (%)",
-        font=dict(family="Inter, system-ui, sans-serif", color=BRAND_INK),
+        template=PLOTLY_TEMPLATE,
+        font=dict(family="Inter, system-ui, sans-serif", color=PALETTE["TEXT"]),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(gridcolor="#e3dccf"),
-        yaxis=dict(gridcolor="#e3dccf", zerolinecolor="#c9bfae"),
+        xaxis=dict(gridcolor=PALETTE["GRID"]),
+        yaxis=dict(gridcolor=PALETTE["GRID"], zerolinecolor=PALETTE["ZERO"]),
     )
     st.plotly_chart(bar, use_container_width=True)
 
@@ -961,6 +1283,9 @@ with tab1:
         st.markdown(f"**Sector:** {sel['Sector']}")
         exch = sel.get("Exchange")
         st.markdown(f"**Exchange:** {exch if pd.notna(exch) else 'N/A'}")
+        buy_date = sel.get("Buy_Date")
+        if buy_date:
+            st.markdown(f"**Buy date:** {buy_date} → {period_end}")
     with info_right:
         yahoo_url = sel.get("Yahoo_URL")
         if pd.notna(yahoo_url) and str(yahoo_url).startswith("http"):
@@ -1185,7 +1510,7 @@ with tab2:
             name="Today (mark-to-market)", line=dict(color=BRAND_GOLD, dash="dash"),
             hovertemplate="S = $%{x:.2f}<br>P&L = $%{y:.2f}<extra>Today</extra>",
         ))
-        fig_payoff.add_vline(x=spot, line=dict(color=BRAND_INK, dash="dot"),
+        fig_payoff.add_vline(x=spot, line=dict(color=PALETTE["TEXT_MUTED"], dash="dot"),
                              annotation_text=f"Spot ${spot:.2f}", annotation_position="top")
         fig_payoff.add_hline(y=0, line=dict(color="#c9bfae"))
         for be in breakevens:
@@ -1196,10 +1521,11 @@ with tab2:
             yaxis_title="P&L per share ($)",
             hovermode="x unified",
             margin=dict(t=30, b=10, l=10, r=10),
-            font=dict(family="Inter, system-ui, sans-serif", color=BRAND_INK),
+            template=PLOTLY_TEMPLATE,
+            font=dict(family="Inter, system-ui, sans-serif", color=PALETTE["TEXT"]),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(gridcolor="#e3dccf"),
-            yaxis=dict(gridcolor="#e3dccf", zerolinecolor="#c9bfae"),
+            xaxis=dict(gridcolor=PALETTE["GRID"]),
+            yaxis=dict(gridcolor=PALETTE["GRID"], zerolinecolor=PALETTE["ZERO"]),
         )
         st.plotly_chart(fig_payoff, use_container_width=True)
 
@@ -1226,7 +1552,7 @@ with tab2:
         fig_vol = go.Figure()
         fig_vol.add_trace(go.Scatter(
             x=S_arr, y=payoff_expiry, mode="lines",
-            name="At expiration", line=dict(color=BRAND_INK, dash="dot"),
+            name="At expiration", line=dict(color=PALETTE["TEXT_MUTED"], dash="dot"),
         ))
         fig_vol.add_trace(go.Scatter(
             x=S_arr, y=value_today, mode="lines",
@@ -1248,17 +1574,18 @@ with tab2:
                 mode="lines", name=f"IV {sigma_user * 100:.1f}% (your shift)",
                 line=dict(color=BRAND_MAROON_DEEP, width=3),
             ))
-        fig_vol.add_vline(x=spot, line=dict(color=BRAND_INK, dash="dot"))
+        fig_vol.add_vline(x=spot, line=dict(color=PALETTE["TEXT_MUTED"], dash="dot"))
         fig_vol.add_hline(y=0, line=dict(color="#c9bfae"))
         fig_vol.update_layout(
             xaxis_title="Underlying price",
             yaxis_title="P&L per share ($)",
             hovermode="x unified",
             margin=dict(t=30, b=10, l=10, r=10),
-            font=dict(family="Inter, system-ui, sans-serif", color=BRAND_INK),
+            template=PLOTLY_TEMPLATE,
+            font=dict(family="Inter, system-ui, sans-serif", color=PALETTE["TEXT"]),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(gridcolor="#e3dccf"),
-            yaxis=dict(gridcolor="#e3dccf", zerolinecolor="#c9bfae"),
+            xaxis=dict(gridcolor=PALETTE["GRID"]),
+            yaxis=dict(gridcolor=PALETTE["GRID"], zerolinecolor=PALETTE["ZERO"]),
         )
         st.plotly_chart(fig_vol, use_container_width=True)
 
@@ -1292,10 +1619,11 @@ with tab2:
             hovertemplate="Price change %{x}<br>Days remaining %{y}<br>P&L $%{z:.2f}<extra></extra>",
         ))
         fig_hm.update_layout(
+            template=PLOTLY_TEMPLATE,
             xaxis_title="Price change",
             yaxis_title="Days remaining",
             margin=dict(t=30, b=10, l=10, r=10),
-            font=dict(family="Inter, system-ui, sans-serif", color=BRAND_INK),
+            font=dict(family="Inter, system-ui, sans-serif", color=PALETTE["TEXT"]),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(fig_hm, use_container_width=True)

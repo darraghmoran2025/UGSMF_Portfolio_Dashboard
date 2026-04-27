@@ -10,14 +10,22 @@ const SECTORS = [
 
 const TICKER_TO_SECTOR = {
   HON: "Industrials",
+  ATEX: "Industrials",
   MU: "Technology",
+  INOD: "Technology",
   BBIO: "Healthcare",
+  VRTX: "Healthcare",
   WPM: "Real Assets",
+  XOM: "Real Assets",
   NEM: "Alternative Assets",
+  FCX: "Alternative Assets",
   BYD: "Consumer",
+  BYDDF: "Consumer",
+  PG: "Consumer",
   "1211.HK": "Consumer",
   ALIZY: "Financials",
   "ALV.DE": "Financials",
+  V: "Financials",
 };
 
 const PRESETS = ["Custom", "Bull Call Spread", "Iron Condor", "Straddle"];
@@ -26,10 +34,10 @@ let holdings = [];
 let benchmark = {
   name: "MSCI World Index",
   start: 4322.9,
-  end: 4437.08,
+  end: 4609,
 };
 let periodStart = "2025-10-20";
-let periodEnd = "2026-03-11";
+let periodEnd = "2026-04-24";
 let sectorWeights = {};
 let stockShares = {};
 let optionTickerSignature = "";
@@ -40,6 +48,16 @@ const plotConfig = { responsive: true, displayModeBar: false };
 
 function $(id) {
   return document.getElementById(id);
+}
+
+function isDarkMode() {
+  return document.body.dataset.theme === "dark";
+}
+
+function currentTheme() {
+  return isDarkMode()
+    ? { text: "#f7f1e7", grid: "#3a322a", zero: "#5a5045", panel: "#221c15", muted: "#c9bfae" }
+    : { text: "#1a1410", grid: "#e3dccf", zero: "#c9bfae", panel: "#ffffff", muted: "#6b6157" };
 }
 
 function fmtPct(value, signed = false) {
@@ -119,7 +137,16 @@ function dateFromColumn(col) {
     const parsed = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
+  const dashed = col.match(/(\d{1,2})[-_](\d{1,2})[-_](\d{4})/);
+  if (dashed) {
+    const parsed = new Date(Date.UTC(Number(dashed[3]), Number(dashed[2]) - 1, Number(dashed[1])));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
   return null;
+}
+
+function fmtIsoDate(date) {
+  return date instanceof Date && !Number.isNaN(date.getTime()) ? date.toISOString().slice(0, 10) : "";
 }
 
 function cleanNumber(value) {
@@ -160,10 +187,14 @@ function loadPortfolio(text, { compare = false } = {}) {
     .map((header, index) => ({ header, index, date: header.toLowerCase().startsWith("price_") ? dateFromColumn(header) : null }))
     .filter((item) => item.date);
 
+  let initialStartDate = null;
+  let endDate = null;
   if (!headers.includes("Price_Start") && !headers.includes("Price_End") && priceColumns.length >= 2) {
     priceColumns.sort((a, b) => a.date - b.date);
-    periodStart = priceColumns[0].date.toISOString().slice(0, 10);
-    periodEnd = priceColumns[priceColumns.length - 1].date.toISOString().slice(0, 10);
+    initialStartDate = priceColumns[0].date;
+    endDate = priceColumns[priceColumns.length - 1].date;
+    periodStart = fmtIsoDate(initialStartDate);
+    periodEnd = fmtIsoDate(endDate);
     headers = headers.map((header, index) => {
       if (index === priceColumns[0].index) return "Price_Start";
       if (index === priceColumns[priceColumns.length - 1].index) return "Price_End";
@@ -171,7 +202,24 @@ function loadPortfolio(text, { compare = false } = {}) {
     });
   }
 
-  const records = dataRows.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""])));
+  let currentBuyDate = initialStartDate;
+  const records = [];
+  dataRows.forEach((row) => {
+    const tickerIndex = headers.indexOf("Ticker");
+    const ticker = row[tickerIndex] || "";
+    if (!ticker.trim()) {
+      row.some((cell) => {
+        if (!String(cell || "").toLowerCase().startsWith("price_")) return false;
+        const parsedDate = dateFromColumn(cell);
+        if (parsedDate) currentBuyDate = parsedDate;
+        return Boolean(parsedDate);
+      });
+      return;
+    }
+    const record = Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""]));
+    record.Buy_Date = fmtIsoDate(currentBuyDate);
+    records.push(record);
+  });
   const parsed = records
     .filter((row) => row.Ticker)
     .map((row) => {
@@ -194,6 +242,7 @@ function loadPortfolio(text, { compare = false } = {}) {
         weight: Number.isFinite(weight) ? weight : 0,
         return: Number.isFinite(ret) ? ret : 0,
         url: row.Yahoo_Finance_URL || row.Yahoo_URL || "",
+        buyDate: row.Buy_Date || periodStart,
       };
     });
 
@@ -308,17 +357,93 @@ function renderControls() {
   const container = $("sectorControls");
   container.innerHTML = "";
   SECTORS.forEach((sector) => {
+    const sectorRows = holdings.filter((row) => row.sector === sector);
     const row = document.createElement("div");
     row.className = "control-row";
     row.innerHTML = `
       <header><strong>${sector}</strong><span>${(sectorWeights[sector] || 0).toFixed(1)}%</span></header>
-      <input type="range" min="0" max="100" step="0.1" value="${sectorWeights[sector] || 0}" />
+      <div class="control-pair">
+        <input class="sector-range" type="range" min="0" max="100" step="0.1" value="${sectorWeights[sector] || 0}" />
+        <input class="sector-number" type="number" min="0" max="100" step="0.1" value="${(sectorWeights[sector] || 0).toFixed(1)}" />
+      </div>
+      <details class="stock-controls" open>
+        <summary>Stocks in ${sector} (${sectorRows.length})</summary>
+        <div class="stock-control-body"></div>
+      </details>
     `;
-    row.querySelector("input").addEventListener("input", (event) => {
+    row.querySelector(".sector-range").addEventListener("input", (event) => {
       rebalanceSectors(sector, Number(event.target.value));
       renderAll();
     });
+    row.querySelector(".sector-number").addEventListener("change", (event) => {
+      rebalanceSectors(sector, Number(event.target.value));
+      renderAll();
+    });
+    renderStockControls(row.querySelector(".stock-control-body"), sector, sectorRows);
     container.appendChild(row);
+  });
+}
+
+function renderStockControls(container, sector, rows) {
+  if (!rows.length) {
+    container.innerHTML = '<p class="muted-note">No stocks in this sector.</p>';
+    return;
+  }
+  if (rows.length === 1) {
+    const only = rows[0];
+    container.innerHTML = `<p class="muted-note"><strong>${escapeHtml(only.ticker)}</strong> receives 100% of this sector.</p>`;
+    stockShares[only.ticker] = 100;
+    return;
+  }
+  const presetButtons = rows.length === 2
+    ? [
+      ["50/50", [50, 50]],
+      ["60/40", [60, 40]],
+      ["40/60", [40, 60]],
+      ["100/0", [100, 0]],
+      ["0/100", [0, 100]],
+    ]
+    : [
+      [`Equal (${(100 / rows.length).toFixed(1)}% each)`, rows.map(() => 100 / rows.length)],
+      ...rows.map((holding, index) => [`100% ${holding.ticker}`, rows.map((_, i) => (i === index ? 100 : 0))]),
+    ];
+  container.innerHTML = `
+    <div class="preset-row">
+      ${presetButtons.map(([label]) => `<button type="button" data-preset="${escapeHtml(label)}">${escapeHtml(label)}</button>`).join("")}
+    </div>
+    ${rows.map((holding) => {
+      const share = stockShares[holding.ticker] ?? (100 / rows.length);
+      const portfolioShare = (sectorWeights[sector] || 0) * share / 100;
+      return `
+        <div class="stock-row" data-ticker="${escapeHtml(holding.ticker)}">
+          <header><strong>${escapeHtml(holding.ticker)}</strong><span>${portfolioShare.toFixed(1)}% portfolio</span></header>
+          <small>${escapeHtml(holding.company)} · ${fmtPct(holding.return, true)}</small>
+          <div class="control-pair">
+            <input class="stock-range" type="range" min="0" max="100" step="0.1" value="${share}" />
+            <input class="stock-number" type="number" min="0" max="100" step="0.1" value="${share.toFixed(1)}" />
+          </div>
+        </div>
+      `;
+    }).join("")}
+  `;
+  container.querySelectorAll(".preset-row button").forEach((button) => {
+    button.addEventListener("click", () => {
+      const found = presetButtons.find(([label]) => label === button.dataset.preset);
+      if (!found) return;
+      found[1].forEach((weight, index) => { stockShares[rows[index].ticker] = weight; });
+      renderAll();
+    });
+  });
+  container.querySelectorAll(".stock-row").forEach((node) => {
+    const ticker = node.dataset.ticker;
+    node.querySelector(".stock-range").addEventListener("input", (event) => {
+      rebalanceStocks(sector, ticker, Number(event.target.value));
+      renderAll();
+    });
+    node.querySelector(".stock-number").addEventListener("change", (event) => {
+      rebalanceStocks(sector, ticker, Number(event.target.value));
+      renderAll();
+    });
   });
 }
 
@@ -335,8 +460,25 @@ function rebalanceSectors(changed, value) {
   }
 }
 
+function rebalanceStocks(sector, changedTicker, value) {
+  const capped = Math.max(0, Math.min(100, value));
+  const rows = holdings.filter((row) => row.sector === sector);
+  const others = rows.map((row) => row.ticker).filter((ticker) => ticker !== changedTicker);
+  stockShares[changedTicker] = capped;
+  const remaining = 100 - capped;
+  const otherTotal = others.reduce((sum, ticker) => sum + (stockShares[ticker] || 0), 0);
+  if (!others.length) {
+    stockShares[changedTicker] = 100;
+  } else if (otherTotal <= 0) {
+    others.forEach((ticker) => { stockShares[ticker] = remaining / others.length; });
+  } else {
+    others.forEach((ticker) => { stockShares[ticker] = (stockShares[ticker] / otherTotal) * remaining; });
+  }
+}
+
 function renderPortfolio() {
   const { rows, portfolioReturn, benchmarkReturn, alpha } = portfolioStats();
+  const theme = currentTheme();
   $("portfolioReturn").textContent = fmtPct(portfolioReturn);
   $("benchmarkReturn").textContent = fmtPct(benchmarkReturn);
   $("alphaReturn").textContent = fmtPct(alpha, true);
@@ -352,7 +494,7 @@ function renderPortfolio() {
     textinfo: "percent",
     textposition: "inside",
     automargin: true,
-    marker: { colors: BRAND_COLORWAY, line: { color: "#ffffff", width: 2 } },
+    marker: { colors: BRAND_COLORWAY, line: { color: theme.panel, width: 2 } },
   }], sectorLayout(), plotConfig);
 
   const sortedByContribution = [...rows].sort((a, b) => b.contribution - a.contribution);
@@ -378,7 +520,7 @@ function renderPortfolio() {
   }], {
     ...layout("Holding returns", "Return (%)"),
     shapes: Number.isFinite(benchmarkReturn)
-      ? [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: benchmarkReturn * 100, y1: benchmarkReturn * 100, line: { dash: "dash", color: "#17202a" } }]
+      ? [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: benchmarkReturn * 100, y1: benchmarkReturn * 100, line: { dash: "dash", color: theme.muted } }]
       : [],
   }, plotConfig);
 
@@ -406,15 +548,16 @@ const BRAND_COLORWAY = [
 ];
 
 function layout(title, ytitle) {
+  const theme = currentTheme();
   return {
     title: { text: "", font: { size: 1 } },
     margin: { l: 50, r: 20, t: 20, b: 50 },
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
     colorway: BRAND_COLORWAY,
-    font: { family: "Inter, system-ui, sans-serif", color: "#1a1410" },
-    yaxis: { title: ytitle || "", gridcolor: "#e3dccf", zerolinecolor: "#c9bfae" },
-    xaxis: { gridcolor: "#e3dccf", zerolinecolor: "#c9bfae" },
+    font: { family: "Inter, system-ui, sans-serif", color: theme.text },
+    yaxis: { title: ytitle || "", gridcolor: theme.grid, zerolinecolor: theme.zero },
+    xaxis: { gridcolor: theme.grid, zerolinecolor: theme.zero },
     showlegend: true,
   };
 }
@@ -454,16 +597,18 @@ function renderStockDetail(rows) {
     <div><span>Portfolio Weight</span><strong>${fmtPct(row.weight)}</strong></div>
     <div><span>Contribution</span><strong>${fmtPct(row.contribution, true)}</strong></div>
     <div><span>Price Move</span><strong>${fmtMoney(row.priceStart)} to ${fmtMoney(row.priceEnd)}</strong></div>
+    <div><span>Buy Date</span><strong>${escapeHtml(row.buyDate || periodStart)}</strong></div>
     <a href="${url}" target="_blank" rel="noreferrer">Open Yahoo Finance</a>
   `;
 }
 
 function renderTable(rows) {
   $("holdingsTable").innerHTML = `
-    <thead><tr><th>Ticker</th><th>Company</th><th>Sector</th><th>Weight</th><th>Return</th><th>Contribution</th><th>Start</th><th>End</th></tr></thead>
+    <thead><tr><th>Ticker</th><th>Company</th><th>Sector</th><th>Buy Date</th><th>Weight</th><th>Return</th><th>Contribution</th><th>Start</th><th>End</th></tr></thead>
     <tbody>${rows.map((row) => `
       <tr>
         <td>${escapeHtml(row.ticker)}</td><td>${escapeHtml(row.company)}</td><td>${escapeHtml(row.sector)}</td>
+        <td>${escapeHtml(row.buyDate || periodStart)}</td>
         <td>${fmtPct(row.weight)}</td><td>${fmtPct(row.return)}</td><td>${fmtPct(row.contribution, true)}</td>
         <td>${fmtMoney(row.priceStart)}</td><td>${fmtMoney(row.priceEnd)}</td>
       </tr>`).join("")}</tbody>
@@ -700,6 +845,15 @@ function findBreakevens(xs, ys) {
 }
 
 function wireEvents() {
+  const savedTheme = localStorage.getItem("smf-theme");
+  if (savedTheme === "dark") document.body.dataset.theme = "dark";
+  $("themeToggle").textContent = isDarkMode() ? "Day mode" : "Night mode";
+  $("themeToggle").addEventListener("click", () => {
+    document.body.dataset.theme = isDarkMode() ? "" : "dark";
+    localStorage.setItem("smf-theme", isDarkMode() ? "dark" : "light");
+    $("themeToggle").textContent = isDarkMode() ? "Day mode" : "Night mode";
+    renderAll();
+  });
   document.querySelectorAll(".tab").forEach((button) => {
     button.addEventListener("click", () => {
       document.querySelectorAll(".tab").forEach((tab) => tab.classList.remove("active"));

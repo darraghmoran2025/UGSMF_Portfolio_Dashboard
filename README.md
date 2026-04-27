@@ -6,8 +6,10 @@ Streamlit and static dashboard for a Student Managed Fund portfolio. It includes
 
 - Upload a portfolio CSV or use the bundled `portfolio.csv` sample.
 - Compare an uploaded reporting period against the previously loaded period.
-- Calculate holding returns, portfolio contribution, benchmark return, and alpha.
-- Adjust sector and within-sector weights interactively.
+- Calculate holding returns, portfolio contribution, MSCI World benchmark return, and alpha.
+- Pull live MSCI World benchmark data from Yahoo Finance via `yfinance`.
+- Adjust sector and within-sector weights interactively with sliders, manual inputs, and quick ratio buttons.
+- Toggle night mode from the sidebar.
 - View return, contribution, volatility, and stock-level charts.
 - Build basic multi-leg options strategies and inspect payoff, Greeks, volatility stress, and risk heatmaps.
 
@@ -36,15 +38,18 @@ Then open the local URL printed by Streamlit, usually `http://localhost:8501`.
 
 ## CSV Format
 
-The app accepts a CSV with either dated price columns or normalized start/end columns. Example:
+The app accepts the current `stock_performance_*.csv` format with sector, dated price columns, optional separator rows for new buy batches, and an optional benchmark row. Example:
 
 ```csv
 Sector,Ticker,Company,Exchange,Price_24Apr2026,Price_20Oct2025,Yahoo_Finance_URL
 Industrials,HON,Honeywell International,NASDAQ / USD,213.17,194.73,https://finance.yahoo.com/quote/HON/history/
 Technology,MU,Micron Technology,NASDAQ / USD,496.72,198.47,https://finance.yahoo.com/quote/MU/history/
+,,,,,Price_2Mar2026,
+Industrials,ATEX,Anterix,NASDAQ / USD,45.17,37.2,https://stockanalysis.com/stocks/atex/history/
+Benchmark,MSCI World Index,,,4609,4322.9,
 ```
 
-It can also read files with preamble rows before the table header. Sector labels are read directly when supplied. Weights, returns, and contributions are derived when they are not supplied.
+The separator row rebases the buy date for holdings below it while reusing the same start-price column. The benchmark row is excluded from holdings and used for alpha. Sector labels are read directly when supplied. Weights, returns, and contributions are derived when they are not supplied.
 
 ## Project Files
 

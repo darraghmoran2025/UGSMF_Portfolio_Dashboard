@@ -17,6 +17,17 @@
   --bad: #b42318;
 }
 
+body[data-theme="dark"] {
+  --bg: #13100c;
+  --panel: #221c15;
+  --ink: #f7f1e7;
+  --muted: #c9bfae;
+  --line: #3a322a;
+  --line-strong: #5a5045;
+  --good: #3fb273;
+  --bad: #e05a6d;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -45,6 +56,13 @@ select {
   justify-content: space-between;
   min-height: 108px;
   padding: 18px clamp(18px, 4vw, 48px);
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .brand-lockup {
@@ -124,6 +142,7 @@ main {
 }
 
 .upload-button,
+.theme-toggle,
 button {
   align-items: center;
   background: var(--brand-maroon);
@@ -140,6 +159,7 @@ button {
 }
 
 .upload-button:hover,
+.theme-toggle:hover,
 button:hover {
   background: var(--brand-maroon-deep);
   border-color: var(--brand-maroon-deep);
@@ -152,6 +172,11 @@ button:active {
 
 .upload-button input {
   display: none;
+}
+
+.theme-toggle {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.45);
 }
 
 .metrics {
@@ -232,7 +257,7 @@ button:active {
 }
 
 #portfolioTab {
-  grid-template-columns: 310px 1fr;
+  grid-template-columns: 380px 1fr;
 }
 
 .hidden {
@@ -264,7 +289,7 @@ button:active {
 }
 
 .panel-heading button {
-  background: white;
+  background: var(--panel);
   border-color: var(--line-strong);
   color: var(--ink);
 }
@@ -294,6 +319,67 @@ button:active {
 .control-row input[type="range"] {
   accent-color: var(--brand-maroon);
   width: 100%;
+}
+
+.control-pair {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 82px;
+}
+
+.stock-controls {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px;
+}
+
+.stock-controls summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.stock-control-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset-row button {
+  background: var(--panel);
+  border-color: var(--line-strong);
+  color: var(--ink);
+  font-size: 0.76rem;
+  min-height: 30px;
+  padding: 5px 8px;
+}
+
+.stock-row {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+  padding-top: 9px;
+}
+
+.stock-row header {
+  align-items: center;
+  display: flex;
+  font-size: 0.86rem;
+  justify-content: space-between;
+}
+
+.stock-row small,
+.muted-note {
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .dashboard-grid {
@@ -346,8 +432,9 @@ button:active {
 
 select,
 input[type="number"] {
-  background: white;
+  background: var(--panel);
   border: 1px solid var(--line-strong);
+  color: var(--ink);
   border-radius: 6px;
   min-height: 38px;
   padding: 7px 9px;
@@ -546,6 +633,15 @@ tbody tr:hover {
   .brand-logo {
     height: 72px;
     width: 72px;
+  }
+
+  .header-actions {
+    justify-content: stretch;
+  }
+
+  .header-actions > * {
+    flex: 1 1 auto;
+    justify-content: center;
   }
 
   .risk-grid {
