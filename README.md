@@ -48,6 +48,7 @@ It can also read files with preamble rows before the table header. Sectors, weig
 ## Project Files
 
 - `streamlit_app.py`: Streamlit application for local or Streamlit Cloud use.
+- `app.py`: Minimal Vercel ASGI entrypoint that serves the static dashboard.
 - `portfolio.csv`: Bundled sample data.
 - `requirements-streamlit.txt`: Python dependencies for the Streamlit app.
 - `static/`: Vercel-compatible browser dashboard.
@@ -84,7 +85,8 @@ Output Directory: dist
 ```
 
 `vercel.json` already sets those values. The build copies the static browser
-dashboard and `portfolio.csv` into `dist/`.
+dashboard and `portfolio.csv` into `dist/`. If Vercel still detects the project
+as Python, `app.py` serves that same static build through a valid ASGI entrypoint.
 
 ## License
 
