@@ -1,14 +1,8 @@
-Student Managed Fund - Holding Period Report
-Period Start,2025-10-22
-Period End,2026-03-11
-Benchmark,MSCI World Index,4322.90,4437.08
-
-Sector,Ticker,Company,Price_Start,Price_End,Weight,Return,Contribution
-Industrials,HON,Honeywell International,210.50,238.40,0.18,0.1325,0.02385
-Consumer,BYD,Boyd Gaming,72.10,95.30,0.12,0.3218,0.03862
-Technology,MU,Micron Technology,98.40,142.75,0.20,0.4507,0.09014
-Healthcare,BBIO,BridgeBio Pharma,28.65,42.10,0.10,0.4694,0.04694
-Real Assets,WPM,Wheaton Precious Metals,55.30,82.90,0.15,0.4991,0.07487
-Alternative Assets,NEM,Newmont Corporation,46.20,68.55,0.15,0.4837,0.07256
-Financials,ALIZY,Allianz SE (ADR),28.10,29.50,0.10,0.0498,0.00498
-Benchmark,MSCI,MSCI World Index,4322.90,4437.08,0.00,0.0264,0.00000
+Sector,Ticker,Company,Exchange,Price_24Apr2026,Price_20Oct2025,Yahoo_Finance_URL
+Industrials,HON,Honeywell International,NASDAQ / USD,213.17,194.73,https://finance.yahoo.com/quote/HON/history/
+Consumer,BYDDF,BYD Co. Ltd.,OTC / USD,99.46,102.9,https://finance.yahoo.com/quote/BYDDF/history/
+Technology,MU,Micron Technology,NASDAQ / USD,496.72,198.47,https://finance.yahoo.com/quote/MU/history/
+Healthcare,BBIO,BridgeBio Pharma,NASDAQ / USD,73.28,53.24,https://finance.yahoo.com/quote/BBIO/history/
+Real Assets,WPM,Wheaton Precious Metals,NYSE / USD,139.44,97.13,https://finance.yahoo.com/quote/WPM/history/
+Alternative Assets,NEM,Newmont Corporation,NYSE / USD,120.7,87.01,https://finance.yahoo.com/quote/NEM/history/
+Financials,ALIZY,Allianz SE ADR,OTC ADR / USD,388,351.7,https://finance.yahoo.com/quote/ALIZY/history/

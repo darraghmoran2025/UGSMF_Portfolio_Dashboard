@@ -4,8 +4,9 @@
   --ink: #17202a;
   --muted: #667085;
   --line: #d9e0e7;
-  --accent: #0f766e;
-  --accent-dark: #115e59;
+  --accent: #8f0000;
+  --accent-dark: #650000;
+  --teal: #0f766e;
   --good: #16803a;
   --bad: #b42318;
 }
@@ -29,7 +30,7 @@ select {
 
 .topbar {
   align-items: center;
-  background: #17202a;
+  background: #8f0000;
   color: white;
   display: flex;
   justify-content: space-between;
@@ -37,8 +38,24 @@ select {
   padding: 20px clamp(18px, 4vw, 48px);
 }
 
+.brand-lockup {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  min-width: 0;
+}
+
+.brand-logo {
+  background: #8f0000;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  height: 64px;
+  object-fit: contain;
+  width: 128px;
+}
+
 .eyebrow {
-  color: #9ad8cf;
+  color: #ffd9d9;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -171,6 +188,12 @@ button:hover {
   margin-bottom: 12px;
 }
 
+.subhead {
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin: 5px 0 0;
+}
+
 .panel-heading button {
   background: white;
   border-color: var(--line);
@@ -224,15 +247,24 @@ button:hover {
   margin-top: 18px;
 }
 
-.risk-grid div {
+.risk-grid div,
+.comparison-stats div {
   background: #f8fafc;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 13px;
 }
 
-.risk-grid strong {
+.risk-grid strong,
+.comparison-stats strong {
   font-size: 1.2rem;
+}
+
+.comparison-stats {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 10px 0 16px;
 }
 
 select,
@@ -331,7 +363,8 @@ th {
   #portfolioTab,
   .dashboard-grid,
   .metrics,
-  .option-form {
+  .option-form,
+  .comparison-stats {
     grid-template-columns: 1fr;
   }
 
@@ -353,6 +386,15 @@ th {
 
   .chart {
     height: 340px;
+  }
+
+  .brand-lockup {
+    align-items: flex-start;
+  }
+
+  .brand-logo {
+    height: 52px;
+    width: 104px;
   }
 
   .risk-grid {

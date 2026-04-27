@@ -14,9 +14,12 @@
   </head>
   <body>
     <header class="topbar">
-      <div>
-        <p class="eyebrow">Student Managed Fund</p>
-        <h1>Portfolio Dashboard</h1>
+      <div class="brand-lockup">
+        <img class="brand-logo" src="/assets/ug-smf-logo.svg" alt="University of Galway Student Managed Fund" />
+        <div>
+          <p class="eyebrow">Student Managed Fund</p>
+          <h1>Portfolio Dashboard</h1>
+        </div>
       </div>
       <label class="upload-button">
         Upload CSV
@@ -70,6 +73,18 @@
           <section class="panel wide">
             <h2>Stock Returns vs Benchmark</h2>
             <div id="returnsChart" class="chart chart-short"></div>
+          </section>
+          <section id="comparisonPanel" class="panel wide hidden">
+            <div class="panel-heading">
+              <div>
+                <h2>Reporting Period Change</h2>
+                <p id="comparisonTitle" class="subhead"></p>
+              </div>
+            </div>
+            <div id="comparisonStats" class="comparison-stats"></div>
+            <div class="table-wrap">
+              <table id="comparisonTable"></table>
+            </div>
           </section>
           <section class="panel">
             <h2>Risk Snapshot</h2>

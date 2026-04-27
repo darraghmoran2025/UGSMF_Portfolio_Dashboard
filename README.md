@@ -1,10 +1,11 @@
 # SMF Portfolio Dashboard
 
-Streamlit dashboard for a Student Managed Fund portfolio. It includes portfolio performance analysis, sector and holding weight controls, benchmark comparison, and an options strategy risk engine using Black-Scholes pricing.
+Streamlit and static dashboard for a Student Managed Fund portfolio. It includes portfolio performance analysis, sector and holding weight controls, upload-to-upload reporting period comparisons, benchmark comparison when supplied, and an options strategy risk engine using Black-Scholes pricing.
 
 ## Features
 
 - Upload a portfolio CSV or use the bundled `portfolio.csv` sample.
+- Compare an uploaded reporting period against the previously loaded period.
 - Calculate holding returns, portfolio contribution, benchmark return, and alpha.
 - Adjust sector and within-sector weights interactively.
 - View return, contribution, volatility, and stock-level charts.
@@ -13,7 +14,7 @@ Streamlit dashboard for a Student Managed Fund portfolio. It includes portfolio 
 ## Requirements
 
 - Python 3.11 or newer recommended
-- Packages listed in `requirements.txt`
+- Packages listed in `requirements-streamlit.txt`
 
 ## Setup
 
@@ -38,12 +39,12 @@ Then open the local URL printed by Streamlit, usually `http://localhost:8501`.
 The app accepts a CSV with either dated price columns or normalized start/end columns. Example:
 
 ```csv
-Ticker,Company,Exchange,Price_11Mar2026,Price_20Oct2025,Yahoo_Finance_URL
-HON,Honeywell International,Nasdaq,239.08,194.73,https://finance.yahoo.com/quote/HON/history/
-MSCI World Index,,,4437.08,4322.9,
+Sector,Ticker,Company,Exchange,Price_24Apr2026,Price_20Oct2025,Yahoo_Finance_URL
+Industrials,HON,Honeywell International,NASDAQ / USD,213.17,194.73,https://finance.yahoo.com/quote/HON/history/
+Technology,MU,Micron Technology,NASDAQ / USD,496.72,198.47,https://finance.yahoo.com/quote/MU/history/
 ```
 
-It can also read files with preamble rows before the table header. Sectors, weights, returns, and contributions are derived when they are not supplied.
+It can also read files with preamble rows before the table header. Sector labels are read directly when supplied. Weights, returns, and contributions are derived when they are not supplied.
 
 ## Project Files
 
@@ -51,7 +52,7 @@ It can also read files with preamble rows before the table header. Sectors, weig
 - `app.py`: Minimal Vercel ASGI entrypoint that serves the static dashboard.
 - `portfolio.csv`: Bundled sample data.
 - `requirements-streamlit.txt`: Python dependencies for the Streamlit app.
-- `static/`: Vercel-compatible browser dashboard.
+- `static/`: Vercel-compatible browser dashboard, including the University of Galway SMF logo asset.
 - `package.json`: Static build command for Vercel.
 
 ## Deployment

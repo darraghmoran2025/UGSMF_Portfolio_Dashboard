@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320" role="img" aria-labelledby="title desc">
+  <title id="title">University of Galway Student Managed Fund</title>
+  <desc id="desc">A University of Galway SMF logo lockup on a Galway red background.</desc>
+  <rect width="640" height="320" fill="#8f0000"/>
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M320 74v132" stroke-width="10"/>
+    <path d="M286 122h68v84h-68z" stroke-width="10"/>
+    <path d="M269 206h102" stroke-width="10"/>
+    <path d="M248 222h144" stroke-width="10"/>
+    <path d="M282 122c2-28 17-47 38-58 25 12 40 36 40 72" stroke-width="7"/>
+    <path d="M304 150c0-13 6-24 16-24s16 11 16 24-6 24-16 24-16-11-16-24z" stroke-width="7"/>
+    <path d="M266 162c-14 16-25 31-31 48" stroke-width="8"/>
+    <path d="M374 162c14 16 25 31 31 48" stroke-width="8"/>
+  </g>
+  <g fill="#ffffff" font-family="Inter, Arial, sans-serif" text-anchor="middle">
+    <text x="320" y="270" font-size="34" font-weight="700" letter-spacing="7">UNIVERSITY OF GALWAY</text>
+    <text x="320" y="306" font-size="31" font-weight="700" letter-spacing="8">SMF</text>
+  </g>
+</svg>

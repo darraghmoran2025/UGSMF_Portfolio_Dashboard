@@ -33,6 +33,8 @@ let periodEnd = "2026-03-11";
 let sectorWeights = {};
 let stockShares = {};
 let optionTickerSignature = "";
+let loadedSnapshot = null;
+let uploadComparison = null;
 
 const plotConfig = { responsive: true, displayModeBar: false };
 
@@ -41,12 +43,39 @@ function $(id) {
 }
 
 function fmtPct(value, signed = false) {
+  if (!Number.isFinite(value)) return "--";
   const prefix = signed && value > 0 ? "+" : "";
   return `${prefix}${(value * 100).toFixed(2)}%`;
 }
 
 function fmtMoney(value) {
+  if (!Number.isFinite(value)) return "--";
   return `$${Number(value).toFixed(2)}`;
+}
+
+function fmtSignedMoney(value) {
+  if (!Number.isFinite(value)) return "--";
+  const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${prefix}$${Math.abs(value).toFixed(2)}`;
+}
+
+function toneClass(value) {
+  if (!Number.isFinite(value)) return "";
+  return value >= 0 ? "positive" : "negative";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function parseMonth(monthName) {
+  return ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+    .indexOf(monthName.slice(0, 3).toLowerCase());
 }
 
 function parseCsv(text) {
@@ -80,12 +109,14 @@ function parseCsv(text) {
 function dateFromColumn(col) {
   const compact = col.match(/(\d{1,2})([A-Za-z]{3,9})(\d{4})/);
   if (compact) {
-    const parsed = new Date(`${compact[1]} ${compact[2]} ${compact[3]}`);
+    const month = parseMonth(compact[2]);
+    if (month < 0) return null;
+    const parsed = new Date(Date.UTC(Number(compact[3]), month, Number(compact[1])));
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
   const iso = col.match(/(\d{4})[-_](\d{1,2})[-_](\d{1,2})/);
   if (iso) {
-    const parsed = new Date(`${iso[1]}-${iso[2]}-${iso[3]}`);
+    const parsed = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
   return null;
@@ -96,19 +127,25 @@ function cleanNumber(value) {
   return Number(String(value).replace(/[$,%]/g, "").trim());
 }
 
-function loadPortfolio(text) {
+function loadPortfolio(text, { compare = false } = {}) {
+  const previousSnapshot = compare ? loadedSnapshot : null;
   const rows = parseCsv(text);
   const metaStart = rows.find((row) => row[0]?.toLowerCase() === "period start");
   const metaEnd = rows.find((row) => row[0]?.toLowerCase() === "period end");
   const metaBenchmark = rows.find((row) => row[0]?.toLowerCase() === "benchmark");
   if (metaStart?.[1]) periodStart = metaStart[1];
   if (metaEnd?.[1]) periodEnd = metaEnd[1];
+  let benchmarkAvailable = false;
   if (metaBenchmark) {
+    const start = cleanNumber(metaBenchmark[2]);
+    const end = cleanNumber(metaBenchmark[3]);
     benchmark = {
       name: metaBenchmark[1] || benchmark.name,
-      start: cleanNumber(metaBenchmark[2]) || benchmark.start,
-      end: cleanNumber(metaBenchmark[3]) || benchmark.end,
+      start,
+      end,
+      available: Number.isFinite(start) && Number.isFinite(end) && start > 0,
     };
+    benchmarkAvailable = benchmark.available;
   }
 
   const headerIndex = rows.findIndex((row) => {
@@ -166,13 +203,20 @@ function loadPortfolio(text) {
       name: benchRow.company || benchRow.ticker || benchmark.name,
       start: benchRow.priceStart || benchmark.start,
       end: benchRow.priceEnd || benchmark.end,
+      available: benchRow.priceStart > 0 && benchRow.priceEnd > 0,
     };
+    benchmarkAvailable = benchmark.available;
+  }
+  if (!benchmarkAvailable) {
+    benchmark = { name: "Benchmark", start: NaN, end: NaN, available: false };
   }
 
   holdings = parsed.filter((row) => row.sector !== "Benchmark");
   const missingWeights = holdings.every((row) => !row.weight);
   if (missingWeights && holdings.length) holdings.forEach((row) => { row.weight = 1 / holdings.length; });
   resetStateFromHoldings();
+  loadedSnapshot = buildSnapshot(activeHoldings(), benchmark, periodStart, periodEnd);
+  uploadComparison = previousSnapshot ? compareSnapshots(previousSnapshot, loadedSnapshot) : null;
   renderAll();
 }
 
@@ -199,8 +243,59 @@ function activeHoldings() {
 function portfolioStats() {
   const rows = activeHoldings();
   const portfolioReturn = rows.reduce((sum, row) => sum + row.contribution, 0);
-  const benchmarkReturn = benchmark.start ? benchmark.end / benchmark.start - 1 : 0;
-  return { rows, portfolioReturn, benchmarkReturn, alpha: portfolioReturn - benchmarkReturn };
+  const benchmarkReturn = benchmark.available && benchmark.start ? benchmark.end / benchmark.start - 1 : NaN;
+  const alpha = Number.isFinite(benchmarkReturn) ? portfolioReturn - benchmarkReturn : NaN;
+  return { rows, portfolioReturn, benchmarkReturn, alpha };
+}
+
+function buildSnapshot(rows, sourceBenchmark, start, end) {
+  const portfolioReturn = rows.reduce((sum, row) => sum + row.contribution, 0);
+  const benchmarkReturn = sourceBenchmark.available && sourceBenchmark.start
+    ? sourceBenchmark.end / sourceBenchmark.start - 1
+    : NaN;
+  return {
+    periodStart: start,
+    periodEnd: end,
+    portfolioReturn,
+    benchmarkReturn,
+    alpha: Number.isFinite(benchmarkReturn) ? portfolioReturn - benchmarkReturn : NaN,
+    rows: rows.map((row) => ({
+      ticker: row.ticker,
+      company: row.company,
+      sector: row.sector,
+      return: row.return,
+      weight: row.weight,
+      contribution: row.contribution,
+      priceEnd: row.priceEnd,
+    })),
+  };
+}
+
+function compareSnapshots(previous, current) {
+  const previousByTicker = new Map(previous.rows.map((row) => [row.ticker, row]));
+  const rows = current.rows.map((row) => {
+    const prior = previousByTicker.get(row.ticker);
+    return {
+      ...row,
+      priorReturn: prior?.return,
+      returnDelta: Number.isFinite(prior?.return) ? row.return - prior.return : NaN,
+      priorPriceEnd: prior?.priceEnd,
+      priceDelta: Number.isFinite(prior?.priceEnd) ? row.priceEnd - prior.priceEnd : NaN,
+      status: prior ? "Updated" : "Added",
+    };
+  });
+  current.rows.forEach((row) => previousByTicker.delete(row.ticker));
+  previousByTicker.forEach((row) => {
+    rows.push({
+      ...row,
+      priorReturn: row.return,
+      returnDelta: NaN,
+      priorPriceEnd: row.priceEnd,
+      priceDelta: NaN,
+      status: "Removed",
+    });
+  });
+  return { previous, current, rows };
 }
 
 function renderAll() {
@@ -245,7 +340,7 @@ function renderPortfolio() {
   $("portfolioReturn").textContent = fmtPct(portfolioReturn);
   $("benchmarkReturn").textContent = fmtPct(benchmarkReturn);
   $("alphaReturn").textContent = fmtPct(alpha, true);
-  $("alphaReturn").className = alpha >= 0 ? "positive" : "negative";
+  $("alphaReturn").className = toneClass(alpha);
   $("periodLabel").textContent = `${periodStart} to ${periodEnd}`;
 
   Plotly.react("sectorChart", [{
@@ -253,8 +348,11 @@ function renderPortfolio() {
     labels: SECTORS,
     values: SECTORS.map((sector) => sectorWeights[sector] || 0),
     hole: 0.55,
-    textinfo: "label+percent",
-  }], layout("Sector allocation"), plotConfig);
+    hovertemplate: "%{label}<br>%{percent}<extra></extra>",
+    textinfo: "percent",
+    textposition: "inside",
+    automargin: true,
+  }], sectorLayout(), plotConfig);
 
   const sortedByContribution = [...rows].sort((a, b) => b.contribution - a.contribution);
   Plotly.react("waterfallChart", [{
@@ -273,12 +371,14 @@ function renderPortfolio() {
     type: "bar",
     x: sortedByReturn.map((row) => row.ticker),
     y: sortedByReturn.map((row) => row.return * 100),
-    marker: { color: sortedByReturn.map((row) => row.return >= benchmarkReturn ? "#16803a" : "#b42318") },
+    marker: { color: sortedByReturn.map((row) => row.return >= (Number.isFinite(benchmarkReturn) ? benchmarkReturn : 0) ? "#16803a" : "#b42318") },
     text: sortedByReturn.map((row) => fmtPct(row.return)),
     textposition: "outside",
   }], {
     ...layout("Holding returns", "Return (%)"),
-    shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: benchmarkReturn * 100, y1: benchmarkReturn * 100, line: { dash: "dash", color: "#17202a" } }],
+    shapes: Number.isFinite(benchmarkReturn)
+      ? [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: benchmarkReturn * 100, y1: benchmarkReturn * 100, line: { dash: "dash", color: "#17202a" } }]
+      : [],
   }, plotConfig);
 
   const returns = rows.map((row) => row.return);
@@ -291,6 +391,7 @@ function renderPortfolio() {
 
   renderTickerSelect(rows);
   renderTable(rows);
+  renderComparison();
 }
 
 function layout(title, ytitle) {
@@ -301,6 +402,22 @@ function layout(title, ytitle) {
     plot_bgcolor: "rgba(0,0,0,0)",
     yaxis: { title: ytitle || "" },
     showlegend: true,
+  };
+}
+
+function sectorLayout() {
+  return {
+    ...layout("Sector allocation"),
+    margin: { l: 12, r: 12, t: 12, b: 92 },
+    legend: {
+      orientation: "h",
+      x: 0.5,
+      xanchor: "center",
+      y: -0.12,
+      yanchor: "top",
+      font: { size: 12 },
+    },
+    uniformtext: { mode: "hide", minsize: 11 },
   };
 }
 
@@ -332,9 +449,47 @@ function renderTable(rows) {
     <thead><tr><th>Ticker</th><th>Company</th><th>Sector</th><th>Weight</th><th>Return</th><th>Contribution</th><th>Start</th><th>End</th></tr></thead>
     <tbody>${rows.map((row) => `
       <tr>
-        <td>${row.ticker}</td><td>${row.company}</td><td>${row.sector}</td>
+        <td>${escapeHtml(row.ticker)}</td><td>${escapeHtml(row.company)}</td><td>${escapeHtml(row.sector)}</td>
         <td>${fmtPct(row.weight)}</td><td>${fmtPct(row.return)}</td><td>${fmtPct(row.contribution, true)}</td>
         <td>${fmtMoney(row.priceStart)}</td><td>${fmtMoney(row.priceEnd)}</td>
+      </tr>`).join("")}</tbody>
+  `;
+}
+
+function renderComparison() {
+  const panel = $("comparisonPanel");
+  if (!uploadComparison) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  const { previous, current, rows } = uploadComparison;
+  $("comparisonTitle").textContent = `${previous.periodStart} to ${previous.periodEnd} vs ${current.periodStart} to ${current.periodEnd}`;
+  const alphaDelta = Number.isFinite(previous.alpha) && Number.isFinite(current.alpha) ? current.alpha - previous.alpha : NaN;
+  const benchmarkDelta = Number.isFinite(previous.benchmarkReturn) && Number.isFinite(current.benchmarkReturn)
+    ? current.benchmarkReturn - previous.benchmarkReturn
+    : NaN;
+  $("comparisonStats").innerHTML = `
+    <div><span>Portfolio Return Change</span><strong class="${toneClass(current.portfolioReturn - previous.portfolioReturn)}">${fmtPct(current.portfolioReturn - previous.portfolioReturn, true)}</strong></div>
+    <div><span>Benchmark Change</span><strong class="${toneClass(benchmarkDelta)}">${fmtPct(benchmarkDelta, true)}</strong></div>
+    <div><span>Alpha Change</span><strong class="${toneClass(alphaDelta)}">${fmtPct(alphaDelta, true)}</strong></div>
+  `;
+  const sorted = [...rows].sort((a, b) => {
+    if (a.status !== b.status) return a.status.localeCompare(b.status);
+    return Math.abs(b.returnDelta || 0) - Math.abs(a.returnDelta || 0);
+  });
+  $("comparisonTable").innerHTML = `
+    <thead><tr><th>Ticker</th><th>Status</th><th>Previous Return</th><th>Current Return</th><th>Return Change</th><th>Previous Price</th><th>Current Price</th><th>Price Change</th></tr></thead>
+    <tbody>${sorted.map((row) => `
+      <tr>
+        <td>${escapeHtml(row.ticker)}</td>
+        <td>${row.status}</td>
+        <td>${fmtPct(row.priorReturn)}</td>
+        <td>${row.status === "Removed" ? "--" : fmtPct(row.return)}</td>
+        <td class="${toneClass(row.returnDelta)}">${fmtPct(row.returnDelta, true)}</td>
+        <td>${fmtMoney(row.priorPriceEnd)}</td>
+        <td>${row.status === "Removed" ? "--" : fmtMoney(row.priceEnd)}</td>
+        <td class="${toneClass(row.priceDelta)}">${fmtSignedMoney(row.priceDelta)}</td>
       </tr>`).join("")}</tbody>
   `;
 }
@@ -547,7 +702,7 @@ function wireEvents() {
   $("tickerSelect").addEventListener("change", () => renderStockDetail(portfolioStats().rows));
   $("csvUpload").addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
-    if (file) loadPortfolio(await file.text());
+    if (file) loadPortfolio(await file.text(), { compare: true });
   });
   $("optionTicker").addEventListener("change", () => {
     const row = portfolioStats().rows.find((item) => item.ticker === $("optionTicker").value);
