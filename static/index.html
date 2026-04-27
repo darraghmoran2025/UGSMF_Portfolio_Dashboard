@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SMF Portfolio Dashboard</title>
+    <meta
+      name="description"
+      content="Student Managed Fund portfolio performance and options strategy dashboard."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Student Managed Fund</p>
+        <h1>Portfolio Dashboard</h1>
+      </div>
+      <label class="upload-button">
+        Upload CSV
+        <input id="csvUpload" type="file" accept=".csv,text/csv" />
+      </label>
+    </header>
+
+    <main>
+      <section class="metrics" aria-label="Portfolio summary">
+        <div class="metric">
+          <span>Total Return</span>
+          <strong id="portfolioReturn">--</strong>
+        </div>
+        <div class="metric">
+          <span>Benchmark</span>
+          <strong id="benchmarkReturn">--</strong>
+        </div>
+        <div class="metric">
+          <span>Alpha</span>
+          <strong id="alphaReturn">--</strong>
+        </div>
+        <div class="metric">
+          <span>Period</span>
+          <strong id="periodLabel">--</strong>
+        </div>
+      </section>
+
+      <nav class="tabs" aria-label="Dashboard sections">
+        <button class="tab active" data-tab="portfolio">Portfolio Performance</button>
+        <button class="tab" data-tab="options">Options Strategy</button>
+      </nav>
+
+      <section id="portfolioTab" class="tab-panel">
+        <aside class="controls">
+          <div class="panel-heading">
+            <h2>Allocation Controls</h2>
+            <button id="resetWeights" type="button">Reset</button>
+          </div>
+          <div id="sectorControls" class="control-list"></div>
+        </aside>
+
+        <div class="dashboard-grid">
+          <section class="panel">
+            <h2>Sector Weights</h2>
+            <div id="sectorChart" class="chart"></div>
+          </section>
+          <section class="panel">
+            <h2>Contribution Waterfall</h2>
+            <div id="waterfallChart" class="chart"></div>
+          </section>
+          <section class="panel wide">
+            <h2>Stock Returns vs Benchmark</h2>
+            <div id="returnsChart" class="chart chart-short"></div>
+          </section>
+          <section class="panel">
+            <h2>Risk Snapshot</h2>
+            <div class="risk-grid">
+              <div><span>Std Dev</span><strong id="riskStd">--</strong></div>
+              <div><span>Mean Return</span><strong id="riskMean">--</strong></div>
+              <div><span>Weighted Std Dev</span><strong id="riskWeighted">--</strong></div>
+            </div>
+          </section>
+          <section class="panel">
+            <h2>Stock Deep Dive</h2>
+            <select id="tickerSelect"></select>
+            <div id="stockDetail" class="detail"></div>
+          </section>
+          <section class="panel wide">
+            <h2>Underlying Data</h2>
+            <div class="table-wrap">
+              <table id="holdingsTable"></table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="optionsTab" class="tab-panel hidden">
+        <section class="panel wide">
+          <h2>Options Setup</h2>
+          <div class="option-form">
+            <label>Ticker<select id="optionTicker"></select></label>
+            <label>Spot<input id="spotInput" type="number" min="0.01" step="0.01" /></label>
+            <label>IV %<input id="ivInput" type="number" min="0.1" step="0.1" value="25" /></label>
+            <label>Risk-free %<input id="rateInput" type="number" min="0" step="0.25" value="4" /></label>
+            <label>Days<input id="daysInput" type="number" min="1" step="1" value="30" /></label>
+            <label>Preset<select id="presetSelect"></select></label>
+          </div>
+        </section>
+
+        <section class="panel wide">
+          <h2>Strategy Legs</h2>
+          <div id="legs" class="legs"></div>
+        </section>
+
+        <section class="metrics" aria-label="Options summary">
+          <div class="metric">
+            <span>Net Premium</span>
+            <strong id="netPremium">--</strong>
+          </div>
+          <div class="metric">
+            <span>Max Profit</span>
+            <strong id="maxProfit">--</strong>
+          </div>
+          <div class="metric">
+            <span>Max Loss</span>
+            <strong id="maxLoss">--</strong>
+          </div>
+          <div class="metric">
+            <span>Break-even</span>
+            <strong id="breakeven">--</strong>
+          </div>
+        </section>
+
+        <section class="panel wide">
+          <h2>Payoff Diagram</h2>
+          <div id="payoffChart" class="chart"></div>
+        </section>
+        <section class="panel wide">
+          <h2>Risk Heatmap</h2>
+          <div id="heatmapChart" class="chart"></div>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

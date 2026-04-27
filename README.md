@@ -53,13 +53,36 @@ It can also read files with preamble rows before the table header. Sectors, weig
 
 ## Deployment
 
-For Streamlit Community Cloud, publish this repository to GitHub and set the app entry point to:
+### Streamlit Community Cloud
+
+This app is built with Streamlit. The simplest deployment target is Streamlit
+Community Cloud:
+
+1. Push this repository to GitHub.
+2. In Streamlit Community Cloud, create a new app from the repository.
+3. Set the main file path to:
 
 ```text
 app.py
 ```
 
 No API keys are required for the current version.
+
+### Vercel
+
+The repository includes a static Vercel build in `static/`. This avoids Vercel's
+Python runtime because Streamlit apps are not ASGI/WSGI applications.
+
+Use these Vercel settings:
+
+```text
+Framework Preset: Other
+Build Command: npm run build
+Output Directory: dist
+```
+
+`vercel.json` already sets those values. The build copies the static browser
+dashboard and `portfolio.csv` into `dist/`.
 
 ## License
 
