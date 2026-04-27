@@ -20,7 +20,7 @@ Streamlit dashboard for a Student Managed Fund portfolio. It includes portfolio 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-streamlit.txt
 ```
 
 If the Windows `python` command opens the Microsoft Store or fails, use the Python launcher or the virtualenv Python directly after creating the environment.
@@ -28,7 +28,7 @@ If the Windows `python` command opens the Microsoft Store or fails, use the Pyth
 ## Run
 
 ```powershell
-streamlit run app.py
+streamlit run streamlit_app.py
 ```
 
 Then open the local URL printed by Streamlit, usually `http://localhost:8501`.
@@ -47,9 +47,11 @@ It can also read files with preamble rows before the table header. Sectors, weig
 
 ## Project Files
 
-- `app.py`: Streamlit application.
+- `streamlit_app.py`: Streamlit application for local or Streamlit Cloud use.
 - `portfolio.csv`: Bundled sample data.
-- `requirements.txt`: Python dependencies.
+- `requirements-streamlit.txt`: Python dependencies for the Streamlit app.
+- `static/`: Vercel-compatible browser dashboard.
+- `package.json`: Static build command for Vercel.
 
 ## Deployment
 
@@ -63,7 +65,7 @@ Community Cloud:
 3. Set the main file path to:
 
 ```text
-app.py
+streamlit_app.py
 ```
 
 No API keys are required for the current version.
