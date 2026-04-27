@@ -16,6 +16,7 @@ Accepted CSV format (matches stock_performance_*.csv exports):
     MSCI World Index,,,4437.08,4322.9,
 """
 
+import base64
 import io
 import math
 import re
@@ -32,9 +33,8 @@ from scipy.stats import norm
 # ---------------------------------------------------------------------------
 # Page setup
 # ---------------------------------------------------------------------------
-LOGO_PATH = Path(__file__).parent / "static" / "assets" / "ug-smf-logo.svg"
-MARK_PATH = Path(__file__).parent / "static" / "assets" / "ug-smf-mark.svg"
-FAVICON_PATH = Path(__file__).parent / "static" / "assets" / "favicon.svg"
+LOGO_PATH = Path(__file__).parent / "static" / "assets" / "ug-smf-logo.png"
+FAVICON_PATH = Path(__file__).parent / "static" / "assets" / "ug-smf-logo.png"
 
 BRAND_MAROON = "#8a0a1f"
 BRAND_MAROON_DEEP = "#5e0414"
@@ -79,12 +79,12 @@ st.markdown(
           padding: 22px 28px;
       }}
       .ugsmf-banner img {{
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.18);
           border-radius: 10px;
-          height: 84px;
-          padding: 6px;
-          width: 84px;
+          display: block;
+          flex-shrink: 0;
+          height: 104px;
+          object-fit: contain;
+          width: 104px;
       }}
       .ugsmf-banner .eyebrow {{
           color: {BRAND_GOLD};
@@ -191,35 +191,31 @@ st.markdown(
 )
 
 
-def _embed_svg(path: Path) -> str:
+def _embed_image_b64(path: Path) -> str:
     try:
-        svg = path.read_text(encoding="utf-8")
-        # strip XML declaration if present so it embeds cleanly
-        if svg.lstrip().startswith("<?xml"):
-            svg = svg.split("?>", 1)[1] if "?>" in svg else svg
-        return svg
+        return base64.b64encode(path.read_bytes()).decode("ascii")
     except OSError:
         return ""
 
 
 def render_brand_header() -> None:
-    mark_svg = _embed_svg(MARK_PATH)
-    mark_html = (
-        f'<div style="height:84px;width:84px;display:flex;align-items:center;justify-content:center;'
-        f'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.18);border-radius:10px;'
-        f'padding:6px;box-sizing:border-box;">{mark_svg}</div>'
-        if mark_svg
+    logo_b64 = _embed_image_b64(LOGO_PATH)
+    logo_html = (
+        f'<img src="data:image/png;base64,{logo_b64}" '
+        f'alt="University of Galway Student Managed Fund" '
+        f'style="height:104px;width:104px;border-radius:10px;object-fit:contain;display:block;flex-shrink:0;" />'
+        if logo_b64
         else ""
     )
     st.markdown(
         f"""
         <div class="ugsmf-banner">
-          {mark_html}
+          {logo_html}
           <div>
-            <p class="eyebrow">University of Galway · SMF</p>
+            <p class="eyebrow">Portfolio &amp; Options Analytics</p>
             <h1>Portfolio Dashboard</h1>
             <div class="rule"></div>
-            <p class="subline">Student Managed Fund · Portfolio &amp; Options Analytics</p>
+            <p class="subline">Student Managed Fund</p>
           </div>
         </div>
         """,

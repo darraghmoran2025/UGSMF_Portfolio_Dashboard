@@ -54,14 +54,13 @@ select {
   min-width: 0;
 }
 
-.brand-mark {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+.brand-logo {
   border-radius: 10px;
+  display: block;
   flex-shrink: 0;
-  height: 72px;
-  padding: 4px;
-  width: 72px;
+  height: 92px;
+  object-fit: contain;
+  width: 92px;
 }
 
 .brand-text {
@@ -544,9 +543,9 @@ tbody tr:hover {
     align-items: flex-start;
   }
 
-  .brand-mark {
-    height: 56px;
-    width: 56px;
+  .brand-logo {
+    height: 72px;
+    width: 72px;
   }
 
   .risk-grid {
