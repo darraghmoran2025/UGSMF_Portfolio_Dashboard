@@ -352,6 +352,7 @@ function renderPortfolio() {
     textinfo: "percent",
     textposition: "inside",
     automargin: true,
+    marker: { colors: BRAND_COLORWAY, line: { color: "#ffffff", width: 2 } },
   }], sectorLayout(), plotConfig);
 
   const sortedByContribution = [...rows].sort((a, b) => b.contribution - a.contribution);
@@ -394,13 +395,26 @@ function renderPortfolio() {
   renderComparison();
 }
 
+const BRAND_COLORWAY = [
+  "#8a0a1f", // Galway maroon
+  "#c9a14a", // Galway gold
+  "#5e0414", // deep maroon
+  "#0f766e", // teal
+  "#1f3a5f", // navy
+  "#b03b4e", // soft maroon
+  "#6b6157", // warm grey
+];
+
 function layout(title, ytitle) {
   return {
     title: { text: "", font: { size: 1 } },
     margin: { l: 50, r: 20, t: 20, b: 50 },
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
-    yaxis: { title: ytitle || "" },
+    colorway: BRAND_COLORWAY,
+    font: { family: "Inter, system-ui, sans-serif", color: "#1a1410" },
+    yaxis: { title: ytitle || "", gridcolor: "#e3dccf", zerolinecolor: "#c9bfae" },
+    xaxis: { gridcolor: "#e3dccf", zerolinecolor: "#c9bfae" },
     showlegend: true,
   };
 }

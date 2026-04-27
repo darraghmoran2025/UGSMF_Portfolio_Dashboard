@@ -32,11 +32,219 @@ from scipy.stats import norm
 # ---------------------------------------------------------------------------
 # Page setup
 # ---------------------------------------------------------------------------
+LOGO_PATH = Path(__file__).parent / "static" / "assets" / "ug-smf-logo.svg"
+MARK_PATH = Path(__file__).parent / "static" / "assets" / "ug-smf-mark.svg"
+FAVICON_PATH = Path(__file__).parent / "static" / "assets" / "favicon.svg"
+
+BRAND_MAROON = "#8a0a1f"
+BRAND_MAROON_DEEP = "#5e0414"
+BRAND_GOLD = "#c9a14a"
+BRAND_CREAM = "#f7f1e7"
+BRAND_INK = "#1a1410"
+BRAND_COLORWAY = [
+    BRAND_MAROON,
+    BRAND_GOLD,
+    BRAND_MAROON_DEEP,
+    "#0f766e",
+    "#1f3a5f",
+    "#b03b4e",
+    "#6b6157",
+]
+
 st.set_page_config(
-    page_title="SMF Portfolio Dashboard",
-    page_icon=":chart_with_upwards_trend:",
+    page_title="UGSMF Portfolio Dashboard",
+    page_icon=str(FAVICON_PATH) if FAVICON_PATH.exists() else ":chart_with_upwards_trend:",
     layout="wide",
 )
+
+# University of Galway SMF brand styling
+st.markdown(
+    f"""
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+      html, body, [class*="css"] {{
+          font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif;
+      }}
+
+      .ugsmf-banner {{
+          align-items: center;
+          background: linear-gradient(135deg, {BRAND_MAROON} 0%, {BRAND_MAROON_DEEP} 100%);
+          border-bottom: 3px solid {BRAND_GOLD};
+          border-radius: 12px;
+          color: #fff;
+          display: flex;
+          gap: 22px;
+          margin: 0 0 18px;
+          padding: 22px 28px;
+      }}
+      .ugsmf-banner img {{
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          border-radius: 10px;
+          height: 84px;
+          padding: 6px;
+          width: 84px;
+      }}
+      .ugsmf-banner .eyebrow {{
+          color: {BRAND_GOLD};
+          font-size: 0.78rem;
+          font-weight: 700;
+          letter-spacing: 0.18em;
+          margin: 0 0 4px;
+          text-transform: uppercase;
+      }}
+      .ugsmf-banner h1 {{
+          color: #fff;
+          font-size: 1.9rem;
+          font-weight: 700;
+          letter-spacing: -0.01em;
+          margin: 0 0 4px;
+      }}
+      .ugsmf-banner .subline {{
+          color: rgba(255, 255, 255, 0.78);
+          font-size: 0.86rem;
+          letter-spacing: 0.04em;
+          margin: 0;
+      }}
+      .ugsmf-banner .rule {{
+          background: rgba(255, 255, 255, 0.25);
+          height: 1px;
+          margin: 8px 0 6px;
+          width: 90px;
+      }}
+
+      h1, h2, h3 {{ letter-spacing: -0.01em; }}
+
+      div[data-testid="stMetric"] {{
+          background: #ffffff;
+          border: 1px solid #e3dccf;
+          border-radius: 10px;
+          border-top: 3px solid {BRAND_MAROON};
+          box-shadow: 0 1px 2px rgba(26, 20, 16, 0.04);
+          padding: 14px 16px;
+      }}
+      div[data-testid="stMetricLabel"] {{
+          color: #6b6157;
+          font-size: 0.74rem !important;
+          font-weight: 600;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+      }}
+
+      .stButton > button, .stDownloadButton > button {{
+          background: {BRAND_MAROON};
+          border: 1px solid {BRAND_MAROON};
+          border-radius: 6px;
+          color: #fff;
+          font-weight: 700;
+          letter-spacing: 0.02em;
+      }}
+      .stButton > button:hover, .stDownloadButton > button:hover {{
+          background: {BRAND_MAROON_DEEP};
+          border-color: {BRAND_MAROON_DEEP};
+          color: #fff;
+      }}
+
+      .stTabs [data-baseweb="tab-list"] {{
+          border-bottom: 1px solid #c9bfae;
+          gap: 4px;
+      }}
+      .stTabs [data-baseweb="tab"] {{
+          color: #6b6157;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+      }}
+      .stTabs [aria-selected="true"] {{
+          color: {BRAND_MAROON_DEEP} !important;
+          border-bottom-color: {BRAND_MAROON} !important;
+      }}
+
+      section[data-testid="stSidebar"] {{
+          background: #fbf7f0;
+          border-right: 1px solid #e3dccf;
+      }}
+      section[data-testid="stSidebar"] h2,
+      section[data-testid="stSidebar"] h3 {{
+          color: {BRAND_MAROON_DEEP};
+      }}
+
+      .ugsmf-footer {{
+          border-top: 1px solid #e3dccf;
+          color: #6b6157;
+          font-size: 0.82rem;
+          margin-top: 24px;
+          padding-top: 18px;
+      }}
+      .ugsmf-footer strong {{ color: {BRAND_INK}; }}
+      .ugsmf-footer a {{ color: {BRAND_MAROON_DEEP}; text-decoration: none; }}
+      .ugsmf-footer a:hover {{ text-decoration: underline; }}
+      .ugsmf-footer .disclaimer {{
+          border-top: 1px dashed #e3dccf;
+          font-size: 0.76rem;
+          margin-top: 12px;
+          padding-top: 12px;
+      }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+def _embed_svg(path: Path) -> str:
+    try:
+        svg = path.read_text(encoding="utf-8")
+        # strip XML declaration if present so it embeds cleanly
+        if svg.lstrip().startswith("<?xml"):
+            svg = svg.split("?>", 1)[1] if "?>" in svg else svg
+        return svg
+    except OSError:
+        return ""
+
+
+def render_brand_header() -> None:
+    mark_svg = _embed_svg(MARK_PATH)
+    mark_html = (
+        f'<div style="height:84px;width:84px;display:flex;align-items:center;justify-content:center;'
+        f'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.18);border-radius:10px;'
+        f'padding:6px;box-sizing:border-box;">{mark_svg}</div>'
+        if mark_svg
+        else ""
+    )
+    st.markdown(
+        f"""
+        <div class="ugsmf-banner">
+          {mark_html}
+          <div>
+            <p class="eyebrow">University of Galway · SMF</p>
+            <h1>Portfolio Dashboard</h1>
+            <div class="rule"></div>
+            <p class="subline">Student Managed Fund · Portfolio &amp; Options Analytics</p>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_brand_footer() -> None:
+    st.markdown(
+        """
+        <div class="ugsmf-footer">
+          <div>
+            <strong>University of Galway Student Managed Fund</strong>
+            ·
+            <a href="https://universityofgalwaysmf.com/" target="_blank" rel="noopener">universityofgalwaysmf.com</a>
+            · Portfolio &amp; Options Analytics Dashboard
+          </div>
+          <p class="disclaimer">
+            For educational use by members of the University of Galway Student Managed Fund. Figures are
+            derived from the loaded CSV and Black–Scholes pricing assumptions and are not investment advice.
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 SECTORS = [
     "Industrials",
@@ -352,7 +560,7 @@ def preset_to_legs(preset: str, spot: float, sd_dollar: float) -> list[dict] | N
 # ---------------------------------------------------------------------------
 # Title + upload
 # ---------------------------------------------------------------------------
-st.title("Student Managed Fund — Portfolio Dashboard")
+render_brand_header()
 
 with st.container(border=True):
     st.markdown("### Upload Portfolio CSV")
@@ -652,9 +860,15 @@ with tab1:
         donut = px.pie(
             donut_df, values="Weight", names="Sector", hole=0.55,
             category_orders={"Sector": SECTORS},
+            color_discrete_sequence=BRAND_COLORWAY,
         )
-        donut.update_traces(textposition="inside", textinfo="percent+label")
-        donut.update_layout(showlegend=True, margin=dict(t=30, b=10, l=10, r=10))
+        donut.update_traces(textposition="inside", textinfo="percent+label",
+                            marker=dict(line=dict(color="#ffffff", width=2)))
+        donut.update_layout(
+            showlegend=True, margin=dict(t=30, b=10, l=10, r=10),
+            font=dict(family="Inter, system-ui, sans-serif", color=BRAND_INK),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        )
         st.plotly_chart(donut, use_container_width=True)
 
     with right:
@@ -668,15 +882,19 @@ with tab1:
             go.Waterfall(
                 name="Contribution", orientation="v", measure=measures,
                 x=x_labels, y=y_values, text=text_values, textposition="outside",
-                connector={"line": {"color": "rgb(150,150,150)"}},
-                increasing={"marker": {"color": "#2ca02c"}},
-                decreasing={"marker": {"color": "#d62728"}},
-                totals={"marker": {"color": "#1f77b4"}},
+                connector={"line": {"color": "#c9bfae"}},
+                increasing={"marker": {"color": "#1f7a3a"}},
+                decreasing={"marker": {"color": BRAND_MAROON}},
+                totals={"marker": {"color": BRAND_MAROON_DEEP}},
             )
         )
         waterfall.update_layout(
             yaxis_title="Contribution to Portfolio Return (%)",
             margin=dict(t=30, b=10, l=10, r=10), showlegend=False,
+            font=dict(family="Inter, system-ui, sans-serif", color=BRAND_INK),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(gridcolor="#e3dccf"),
+            yaxis=dict(gridcolor="#e3dccf", zerolinecolor="#c9bfae"),
         )
         st.plotly_chart(waterfall, use_container_width=True)
 
@@ -690,17 +908,23 @@ with tab1:
     bar = px.bar(
         bar_sorted, x="Ticker", y="Return_pct",
         color="Above_Benchmark",
-        color_discrete_map={True: "#2ca02c", False: "#d62728"},
+        color_discrete_map={True: "#1f7a3a", False: BRAND_MAROON},
         text=bar_sorted["Return_pct"].map(lambda v: f"{v:.2f}%"),
         labels={"Return_pct": "Return (%)", "Above_Benchmark": "Beat Benchmark"},
     )
     bar.add_hline(
-        y=BENCHMARK_RETURN * 100, line_dash="dash", line_color="black",
+        y=BENCHMARK_RETURN * 100, line_dash="dash", line_color=BRAND_INK,
         annotation_text=f"{BENCHMARK_NAME}: {BENCHMARK_RETURN * 100:.2f}%",
         annotation_position="top right",
     )
     bar.update_traces(textposition="outside")
-    bar.update_layout(margin=dict(t=30, b=10, l=10, r=10), yaxis_title="Return (%)")
+    bar.update_layout(
+        margin=dict(t=30, b=10, l=10, r=10), yaxis_title="Return (%)",
+        font=dict(family="Inter, system-ui, sans-serif", color=BRAND_INK),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(gridcolor="#e3dccf"),
+        yaxis=dict(gridcolor="#e3dccf", zerolinecolor="#c9bfae"),
+    )
     st.plotly_chart(bar, use_container_width=True)
 
     st.divider()
@@ -957,25 +1181,29 @@ with tab2:
         fig_payoff = go.Figure()
         fig_payoff.add_trace(go.Scatter(
             x=S_arr, y=payoff_expiry, mode="lines",
-            name="At expiration", line=dict(color="#1f77b4", width=2),
+            name="At expiration", line=dict(color=BRAND_MAROON, width=2),
             hovertemplate="S = $%{x:.2f}<br>P&L = $%{y:.2f}<extra>Expiration</extra>",
         ))
         fig_payoff.add_trace(go.Scatter(
             x=S_arr, y=value_today, mode="lines",
-            name="Today (mark-to-market)", line=dict(color="#ff7f0e", dash="dash"),
+            name="Today (mark-to-market)", line=dict(color=BRAND_GOLD, dash="dash"),
             hovertemplate="S = $%{x:.2f}<br>P&L = $%{y:.2f}<extra>Today</extra>",
         ))
-        fig_payoff.add_vline(x=spot, line=dict(color="black", dash="dot"),
+        fig_payoff.add_vline(x=spot, line=dict(color=BRAND_INK, dash="dot"),
                              annotation_text=f"Spot ${spot:.2f}", annotation_position="top")
-        fig_payoff.add_hline(y=0, line=dict(color="gray"))
+        fig_payoff.add_hline(y=0, line=dict(color="#c9bfae"))
         for be in breakevens:
-            fig_payoff.add_vline(x=be, line=dict(color="green", dash="dot"),
+            fig_payoff.add_vline(x=be, line=dict(color="#1f7a3a", dash="dot"),
                                  annotation_text=f"BE ${be:.2f}", annotation_position="bottom")
         fig_payoff.update_layout(
             xaxis_title="Underlying price",
             yaxis_title="P&L per share ($)",
             hovermode="x unified",
             margin=dict(t=30, b=10, l=10, r=10),
+            font=dict(family="Inter, system-ui, sans-serif", color=BRAND_INK),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(gridcolor="#e3dccf"),
+            yaxis=dict(gridcolor="#e3dccf", zerolinecolor="#c9bfae"),
         )
         st.plotly_chart(fig_payoff, use_container_width=True)
 
@@ -1002,35 +1230,39 @@ with tab2:
         fig_vol = go.Figure()
         fig_vol.add_trace(go.Scatter(
             x=S_arr, y=payoff_expiry, mode="lines",
-            name="At expiration", line=dict(color="black", dash="dot"),
+            name="At expiration", line=dict(color=BRAND_INK, dash="dot"),
         ))
         fig_vol.add_trace(go.Scatter(
             x=S_arr, y=value_today, mode="lines",
-            name=f"IV {sigma_pct:.1f}% (base)", line=dict(color="#1f77b4", width=2),
+            name=f"IV {sigma_pct:.1f}% (base)", line=dict(color=BRAND_MAROON, width=2),
         ))
         fig_vol.add_trace(go.Scatter(
             x=S_arr, y=compute_value_curve(S_arr, active_legs, T, r, sigma_high),
             mode="lines", name=f"IV {sigma_high * 100:.1f}% (+10pp)",
-            line=dict(color="#2ca02c"),
+            line=dict(color="#1f7a3a"),
         ))
         fig_vol.add_trace(go.Scatter(
             x=S_arr, y=compute_value_curve(S_arr, active_legs, T, r, sigma_low),
             mode="lines", name=f"IV {sigma_low * 100:.1f}% (−10pp)",
-            line=dict(color="#d62728"),
+            line=dict(color=BRAND_GOLD),
         ))
         if abs(vol_shift) > 0.5 and abs(vol_shift - 10) > 0.5 and abs(vol_shift + 10) > 0.5:
             fig_vol.add_trace(go.Scatter(
                 x=S_arr, y=compute_value_curve(S_arr, active_legs, T, r, sigma_user),
                 mode="lines", name=f"IV {sigma_user * 100:.1f}% (your shift)",
-                line=dict(color="#9467bd", width=3),
+                line=dict(color=BRAND_MAROON_DEEP, width=3),
             ))
-        fig_vol.add_vline(x=spot, line=dict(color="black", dash="dot"))
-        fig_vol.add_hline(y=0, line=dict(color="gray"))
+        fig_vol.add_vline(x=spot, line=dict(color=BRAND_INK, dash="dot"))
+        fig_vol.add_hline(y=0, line=dict(color="#c9bfae"))
         fig_vol.update_layout(
             xaxis_title="Underlying price",
             yaxis_title="P&L per share ($)",
             hovermode="x unified",
             margin=dict(t=30, b=10, l=10, r=10),
+            font=dict(family="Inter, system-ui, sans-serif", color=BRAND_INK),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(gridcolor="#e3dccf"),
+            yaxis=dict(gridcolor="#e3dccf", zerolinecolor="#c9bfae"),
         )
         st.plotly_chart(fig_vol, use_container_width=True)
 
@@ -1067,5 +1299,13 @@ with tab2:
             xaxis_title="Price change",
             yaxis_title="Days remaining",
             margin=dict(t=30, b=10, l=10, r=10),
+            font=dict(family="Inter, system-ui, sans-serif", color=BRAND_INK),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(fig_hm, use_container_width=True)
+
+
+# ---------------------------------------------------------------------------
+# Footer
+# ---------------------------------------------------------------------------
+render_brand_footer()

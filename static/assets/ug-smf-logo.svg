@@ -1,19 +1,79 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" role="img" aria-labelledby="title desc">
   <title id="title">University of Galway Student Managed Fund</title>
-  <desc id="desc">A University of Galway SMF logo lockup on a Galway red background.</desc>
-  <rect width="640" height="320" fill="#8f0000"/>
-  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M320 74v132" stroke-width="10"/>
-    <path d="M286 122h68v84h-68z" stroke-width="10"/>
-    <path d="M269 206h102" stroke-width="10"/>
-    <path d="M248 222h144" stroke-width="10"/>
-    <path d="M282 122c2-28 17-47 38-58 25 12 40 36 40 72" stroke-width="7"/>
-    <path d="M304 150c0-13 6-24 16-24s16 11 16 24-6 24-16 24-16-11-16-24z" stroke-width="7"/>
-    <path d="M266 162c-14 16-25 31-31 48" stroke-width="8"/>
-    <path d="M374 162c14 16 25 31 31 48" stroke-width="8"/>
+  <desc id="desc">White Quadrangle tower mark with University of Galway SMF wordmark on Galway maroon.</desc>
+  <rect width="640" height="640" fill="#8a0a1f"/>
+
+  <!-- Tower silhouette: composed of solid white shapes -->
+  <g fill="#ffffff">
+    <!-- Spire finial -->
+    <path d="M320 70 L324 96 L316 96 Z"/>
+    <!-- Onion dome -->
+    <path d="M320 92
+             C 295 100 286 122 286 144
+             C 286 166 300 178 320 178
+             C 340 178 354 166 354 144
+             C 354 122 345 100 320 92 Z"/>
+    <!-- Dome ring -->
+    <rect x="298" y="178" width="44" height="6"/>
+    <!-- Drum -->
+    <rect x="294" y="186" width="52" height="22"/>
+    <!-- Cornice -->
+    <rect x="282" y="208" width="76" height="6"/>
+    <!-- Tall main tower body -->
+    <rect x="290" y="216" width="60" height="118"/>
+    <!-- Pointed gothic window cut-outs (negative space achieved with maroon) -->
+    <!-- Tower base trim -->
+    <rect x="282" y="334" width="76" height="8"/>
+    <!-- Side turret (left) – smaller, slightly forward -->
+    <path d="M252 158 L260 142 L268 158 Z"/>
+    <rect x="250" y="158" width="20" height="6"/>
+    <rect x="252" y="166" width="16" height="170"/>
+    <rect x="246" y="336" width="28" height="8"/>
+    <!-- Right buttress detail -->
+    <rect x="370" y="220" width="14" height="116"/>
+    <rect x="366" y="336" width="22" height="8"/>
+    <!-- Quadrangle body / gatehouse -->
+    <rect x="222" y="346" width="196" height="40"/>
+    <!-- Stepped plinth -->
+    <rect x="208" y="386" width="224" height="10"/>
+    <rect x="194" y="396" width="252" height="10"/>
+    <rect x="178" y="406" width="284" height="10"/>
   </g>
-  <g fill="#ffffff" font-family="Inter, Arial, sans-serif" text-anchor="middle">
-    <text x="320" y="270" font-size="34" font-weight="700" letter-spacing="7">UNIVERSITY OF GALWAY</text>
-    <text x="320" y="306" font-size="31" font-weight="700" letter-spacing="8">SMF</text>
+
+  <!-- Negative space windows on tower (re-paint maroon over white) -->
+  <g fill="#8a0a1f">
+    <!-- Two pointed lancets on the main tower -->
+    <path d="M302 246
+             L302 286
+             L312 286
+             L312 252
+             C 312 248 308 246 307 246 Z"/>
+    <path d="M328 246
+             L328 286
+             L338 286
+             L338 252
+             C 338 248 334 246 333 246 Z"/>
+    <!-- Trefoil opening below windows -->
+    <circle cx="320" cy="306" r="6"/>
+    <!-- Small arrow slits on the side turret -->
+    <rect x="258" y="190" width="4" height="14"/>
+    <rect x="258" y="218" width="4" height="14"/>
+    <rect x="258" y="246" width="4" height="14"/>
+    <rect x="258" y="274" width="4" height="14"/>
+    <!-- Doorway arch in gatehouse -->
+    <path d="M308 386
+             L308 360
+             C 308 352 314 348 320 348
+             C 326 348 332 352 332 360
+             L332 386 Z"/>
   </g>
+
+  <!-- Wordmark -->
+  <g fill="#ffffff" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" text-anchor="middle">
+    <text x="320" y="478" font-size="42" font-weight="700" letter-spacing="6">UNIVERSITY OF GALWAY</text>
+    <text x="320" y="538" font-size="60" font-weight="800" letter-spacing="22">SMF</text>
+  </g>
+
+  <!-- Decorative rule -->
+  <rect x="240" y="498" width="160" height="2" fill="#ffffff" opacity="0.45"/>
 </svg>

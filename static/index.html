@@ -3,10 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SMF Portfolio Dashboard</title>
+    <title>UGSMF Portfolio Dashboard | University of Galway Student Managed Fund</title>
     <meta
       name="description"
-      content="Student Managed Fund portfolio performance and options strategy dashboard."
+      content="University of Galway Student Managed Fund — portfolio performance and options strategy dashboard."
+    />
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
     />
     <link rel="stylesheet" href="/styles.css" />
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
@@ -15,10 +22,16 @@
   <body>
     <header class="topbar">
       <div class="brand-lockup">
-        <img class="brand-logo" src="/assets/ug-smf-logo.svg" alt="University of Galway Student Managed Fund" />
-        <div>
-          <p class="eyebrow">Student Managed Fund</p>
+        <img
+          class="brand-mark"
+          src="/assets/ug-smf-mark.svg"
+          alt="University of Galway Student Managed Fund mark"
+        />
+        <div class="brand-text">
+          <p class="eyebrow">University of Galway · SMF</p>
           <h1>Portfolio Dashboard</h1>
+          <div class="brand-divider" aria-hidden="true"></div>
+          <p class="subbrand">Student Managed Fund · Portfolio &amp; Options Analytics</p>
         </div>
       </div>
       <label class="upload-button">
@@ -155,5 +168,20 @@
         </section>
       </section>
     </main>
+
+    <footer class="site-footer">
+      <div class="footer-row">
+        <div>
+          <strong>University of Galway Student Managed Fund</strong>
+          ·
+          <a href="https://universityofgalwaysmf.com/" target="_blank" rel="noopener">universityofgalwaysmf.com</a>
+        </div>
+        <div>Portfolio &amp; Options Analytics Dashboard</div>
+      </div>
+      <p class="footer-disclaimer">
+        For educational use by members of the University of Galway Student Managed Fund. Figures are
+        derived from the loaded CSV and Black–Scholes pricing assumptions and are not investment advice.
+      </p>
+    </footer>
   </body>
 </html>

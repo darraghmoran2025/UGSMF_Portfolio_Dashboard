@@ -1,13 +1,19 @@
 :root {
-  --bg: #f4f6f8;
+  --brand-maroon: #8a0a1f;
+  --brand-maroon-deep: #5e0414;
+  --brand-maroon-soft: #b03b4e;
+  --brand-cream: #f7f1e7;
+  --brand-gold: #c9a14a;
+  --brand-ink: #1a1410;
+  --bg: #f5f1ec;
   --panel: #ffffff;
-  --ink: #17202a;
-  --muted: #667085;
-  --line: #d9e0e7;
-  --accent: #8f0000;
-  --accent-dark: #650000;
-  --teal: #0f766e;
-  --good: #16803a;
+  --ink: #1a1410;
+  --muted: #6b6157;
+  --line: #e3dccf;
+  --line-strong: #c9bfae;
+  --accent: var(--brand-maroon);
+  --accent-dark: var(--brand-maroon-deep);
+  --good: #1f7a3a;
   --bad: #b42318;
 }
 
@@ -19,7 +25,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 button,
@@ -30,37 +36,63 @@ select {
 
 .topbar {
   align-items: center;
-  background: #8f0000;
+  background:
+    radial-gradient(circle at 12% 50%, rgba(255, 255, 255, 0.06), transparent 55%),
+    linear-gradient(135deg, var(--brand-maroon) 0%, var(--brand-maroon-deep) 100%);
+  border-bottom: 3px solid var(--brand-gold);
   color: white;
   display: flex;
   justify-content: space-between;
-  min-height: 92px;
-  padding: 20px clamp(18px, 4vw, 48px);
+  min-height: 108px;
+  padding: 18px clamp(18px, 4vw, 48px);
 }
 
 .brand-lockup {
   align-items: center;
   display: flex;
-  gap: 16px;
+  gap: 18px;
   min-width: 0;
 }
 
-.brand-logo {
-  background: #8f0000;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 6px;
-  height: 64px;
-  object-fit: contain;
-  width: 128px;
+.brand-mark {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  flex-shrink: 0;
+  height: 72px;
+  padding: 4px;
+  width: 72px;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brand-divider {
+  background: rgba(255, 255, 255, 0.25);
+  height: 1px;
+  margin: 6px 0 4px;
+  width: 80px;
 }
 
 .eyebrow {
-  color: #ffd9d9;
-  font-size: 0.78rem;
+  color: var(--brand-gold);
+  font-size: 0.74rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  margin: 0 0 6px;
+  letter-spacing: 0.18em;
+  margin: 0;
   text-transform: uppercase;
+}
+
+.subbrand {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  margin: 0;
 }
 
 h1,
@@ -70,36 +102,53 @@ h2 {
 }
 
 h1 {
-  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  font-size: clamp(1.55rem, 2.6vw, 2.1rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
 }
 
 h2 {
   font-size: 1rem;
+  font-weight: 700;
+}
+
+.panel h2 {
+  border-left: 3px solid var(--brand-maroon);
+  padding-left: 10px;
 }
 
 main {
   margin: 0 auto;
   max-width: 1480px;
-  padding: 20px clamp(14px, 3vw, 34px) 42px;
+  padding: 22px clamp(14px, 3vw, 34px) 24px;
 }
 
 .upload-button,
 button {
   align-items: center;
-  background: var(--accent);
-  border: 1px solid var(--accent);
+  background: var(--brand-maroon);
+  border: 1px solid var(--brand-maroon);
   border-radius: 6px;
   color: white;
   cursor: pointer;
   display: inline-flex;
   font-weight: 700;
-  min-height: 38px;
-  padding: 8px 13px;
+  letter-spacing: 0.02em;
+  min-height: 40px;
+  padding: 9px 16px;
+  transition: background 120ms ease, border-color 120ms ease, transform 80ms ease;
 }
 
 .upload-button:hover,
 button:hover {
-  background: var(--accent-dark);
+  background: var(--brand-maroon-deep);
+  border-color: var(--brand-maroon-deep);
+}
+
+.upload-button:active,
+button:active {
+  transform: translateY(1px);
 }
 
 .upload-button input {
@@ -110,7 +159,7 @@ button:hover {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .metric,
@@ -118,12 +167,14 @@ button:hover {
 .controls {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(26, 20, 16, 0.04);
 }
 
 .metric {
-  min-height: 82px;
-  padding: 15px;
+  border-top: 3px solid var(--brand-maroon);
+  min-height: 88px;
+  padding: 16px 16px 14px;
 }
 
 .metric span,
@@ -131,30 +182,49 @@ button:hover {
 .detail span {
   color: var(--muted);
   display: block;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   margin-bottom: 6px;
+  text-transform: uppercase;
 }
 
 .metric strong {
-  font-size: 1.45rem;
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .tabs {
+  border-bottom: 1px solid var(--line-strong);
   display: flex;
-  gap: 8px;
-  margin: 8px 0 16px;
+  gap: 4px;
+  margin: 8px 0 18px;
+  padding-bottom: 0;
 }
 
 .tab {
   background: transparent;
-  border-color: var(--line);
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-bottom: -1px;
+  padding: 11px 16px;
+}
+
+.tab:hover {
+  background: transparent;
+  border-bottom-color: var(--line-strong);
   color: var(--ink);
 }
 
 .tab.active {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: white;
+  background: transparent;
+  border-bottom-color: var(--brand-maroon);
+  color: var(--brand-maroon-deep);
 }
 
 .tab-panel {
@@ -172,7 +242,7 @@ button:hover {
 
 .controls,
 .panel {
-  padding: 16px;
+  padding: 18px;
 }
 
 .controls {
@@ -196,8 +266,14 @@ button:hover {
 
 .panel-heading button {
   background: white;
-  border-color: var(--line);
+  border-color: var(--line-strong);
   color: var(--ink);
+}
+
+.panel-heading button:hover {
+  background: var(--bg);
+  border-color: var(--brand-maroon);
+  color: var(--brand-maroon);
 }
 
 .control-list {
@@ -217,7 +293,7 @@ button:hover {
 }
 
 .control-row input[type="range"] {
-  accent-color: var(--accent);
+  accent-color: var(--brand-maroon);
   width: 100%;
 }
 
@@ -249,8 +325,9 @@ button:hover {
 
 .risk-grid div,
 .comparison-stats div {
-  background: #f8fafc;
+  background: var(--bg);
   border: 1px solid var(--line);
+  border-left: 3px solid var(--brand-maroon);
   border-radius: 6px;
   padding: 13px;
 }
@@ -258,6 +335,7 @@ button:hover {
 .risk-grid strong,
 .comparison-stats strong {
   font-size: 1.2rem;
+  font-weight: 700;
 }
 
 .comparison-stats {
@@ -270,11 +348,18 @@ button:hover {
 select,
 input[type="number"] {
   background: white;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 6px;
   min-height: 38px;
   padding: 7px 9px;
   width: 100%;
+}
+
+select:focus,
+input[type="number"]:focus {
+  border-color: var(--brand-maroon);
+  outline: 2px solid rgba(138, 10, 31, 0.18);
+  outline-offset: 0;
 }
 
 .detail {
@@ -284,8 +369,12 @@ input[type="number"] {
 }
 
 .detail a {
-  color: var(--accent-dark);
+  color: var(--brand-maroon-deep);
   font-weight: 700;
+}
+
+.detail a:hover {
+  color: var(--brand-maroon);
 }
 
 .table-wrap {
@@ -301,15 +390,22 @@ table {
 th,
 td {
   border-bottom: 1px solid var(--line);
-  padding: 10px 9px;
+  padding: 11px 9px;
   text-align: left;
   white-space: nowrap;
 }
 
 th {
+  background: var(--bg);
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+tbody tr:hover {
+  background: rgba(138, 10, 31, 0.03);
 }
 
 .option-form {
@@ -323,8 +419,11 @@ th {
 .leg label {
   color: var(--muted);
   display: grid;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 600;
   gap: 6px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .legs {
@@ -335,7 +434,7 @@ th {
 
 .leg {
   align-items: end;
-  background: #f8fafc;
+  background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
@@ -357,6 +456,44 @@ th {
 
 .negative {
   color: var(--bad);
+}
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 16px auto 0;
+  max-width: 1480px;
+  padding: 22px clamp(14px, 3vw, 34px) 32px;
+}
+
+.site-footer .footer-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  justify-content: space-between;
+}
+
+.site-footer strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.site-footer a {
+  color: var(--brand-maroon-deep);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
+}
+
+.footer-disclaimer {
+  border-top: 1px dashed var(--line);
+  font-size: 0.76rem;
+  margin-top: 14px;
+  padding-top: 14px;
 }
 
 @media (max-width: 1050px) {
@@ -384,6 +521,21 @@ th {
     flex-direction: column;
   }
 
+  .tabs {
+    border-bottom: none;
+  }
+
+  .tab {
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+  }
+
+  .tab.active {
+    background: var(--brand-maroon);
+    border-color: var(--brand-maroon);
+    color: white;
+  }
+
   .chart {
     height: 340px;
   }
@@ -392,9 +544,9 @@ th {
     align-items: flex-start;
   }
 
-  .brand-logo {
-    height: 52px;
-    width: 104px;
+  .brand-mark {
+    height: 56px;
+    width: 56px;
   }
 
   .risk-grid {
