@@ -40,9 +40,14 @@ let periodStart = "2025-10-20";
 let periodEnd = "2026-04-24";
 let sectorWeights = {};
 let stockShares = {};
+let draftSectorWeights = {};
+let draftStockShares = {};
+let weightsDirty = false;
 let optionTickerSignature = "";
 let loadedSnapshot = null;
 let uploadComparison = null;
+let liveQuotes = new Map();
+let liveQuoteState = { loading: false, error: "", fetchedAt: null, requested: 0 };
 
 const plotConfig = { responsive: true, displayModeBar: false };
 
@@ -75,6 +80,21 @@ function fmtSignedMoney(value) {
   if (!Number.isFinite(value)) return "--";
   const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
   return `${prefix}$${Math.abs(value).toFixed(2)}`;
+}
+
+function fmtNumber(value, digits = 2) {
+  if (!Number.isFinite(value)) return "--";
+  return Number(value).toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits });
+}
+
+function fmtDateTime(epochSeconds) {
+  if (!Number.isFinite(epochSeconds)) return "--";
+  return new Date(epochSeconds * 1000).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function toneClass(value) {
@@ -266,18 +286,59 @@ function loadPortfolio(text, { compare = false } = {}) {
   resetStateFromHoldings();
   loadedSnapshot = buildSnapshot(activeHoldings(), benchmark, periodStart, periodEnd);
   uploadComparison = previousSnapshot ? compareSnapshots(previousSnapshot, loadedSnapshot) : null;
+  liveQuotes = new Map();
+  liveQuoteState = { loading: false, error: "", fetchedAt: null, requested: holdings.length };
   renderAll();
+  fetchLiveQuotes({ silent: true });
 }
 
-function resetStateFromHoldings() {
-  sectorWeights = Object.fromEntries(SECTORS.map((sector) => [sector, 0]));
-  holdings.forEach((row) => { sectorWeights[row.sector] = (sectorWeights[row.sector] || 0) + row.weight * 100; });
-  stockShares = {};
+function cloneWeights(weights) {
+  return Object.fromEntries(Object.entries(weights).map(([key, value]) => [key, Number(value) || 0]));
+}
+
+function sameWeights(left, right) {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  return [...keys].every((key) => Math.abs((Number(left[key]) || 0) - (Number(right[key]) || 0)) < 0.001);
+}
+
+function buildWeightsFromHoldings() {
+  const nextSectorWeights = Object.fromEntries(SECTORS.map((sector) => [sector, 0]));
+  holdings.forEach((row) => { nextSectorWeights[row.sector] = (nextSectorWeights[row.sector] || 0) + row.weight * 100; });
+  const nextStockShares = {};
   SECTORS.forEach((sector) => {
     const rows = holdings.filter((row) => row.sector === sector);
     const total = rows.reduce((sum, row) => sum + row.weight, 0);
-    rows.forEach((row) => { stockShares[row.ticker] = total ? (row.weight / total) * 100 : 100 / rows.length; });
+    rows.forEach((row) => { nextStockShares[row.ticker] = total ? (row.weight / total) * 100 : 100 / rows.length; });
   });
+  return { sector: nextSectorWeights, stock: nextStockShares };
+}
+
+function resetStateFromHoldings() {
+  const next = buildWeightsFromHoldings();
+  sectorWeights = cloneWeights(next.sector);
+  stockShares = cloneWeights(next.stock);
+  draftSectorWeights = cloneWeights(next.sector);
+  draftStockShares = cloneWeights(next.stock);
+  weightsDirty = false;
+}
+
+function markDraftDirty() {
+  weightsDirty = !sameWeights(draftSectorWeights, sectorWeights) || !sameWeights(draftStockShares, stockShares);
+}
+
+function resetDraftFromHoldings() {
+  const next = buildWeightsFromHoldings();
+  draftSectorWeights = cloneWeights(next.sector);
+  draftStockShares = cloneWeights(next.stock);
+  markDraftDirty();
+  renderControls();
+}
+
+function applyDraftWeights() {
+  sectorWeights = cloneWeights(draftSectorWeights);
+  stockShares = cloneWeights(draftStockShares);
+  weightsDirty = false;
+  renderAll();
 }
 
 function activeHoldings() {
@@ -350,10 +411,19 @@ function compareSnapshots(previous, current) {
 function renderAll() {
   renderControls();
   renderPortfolio();
+  renderLiveMode();
   renderOptions();
 }
 
 function renderControls() {
+  const status = $("weightApplyStatus");
+  if (status) {
+    status.textContent = weightsDirty
+      ? "You have staged allocation changes. Dashboard numbers will update after Apply Now."
+      : "Current dashboard uses the applied portfolio weights.";
+  }
+  const applyButton = $("applyWeights");
+  if (applyButton) applyButton.disabled = !weightsDirty;
   const container = $("sectorControls");
   container.innerHTML = "";
   SECTORS.forEach((sector) => {
@@ -361,10 +431,10 @@ function renderControls() {
     const row = document.createElement("div");
     row.className = "control-row";
     row.innerHTML = `
-      <header><strong>${sector}</strong><span>${(sectorWeights[sector] || 0).toFixed(1)}%</span></header>
+      <header><strong>${sector}</strong><span>${(draftSectorWeights[sector] || 0).toFixed(1)}%</span></header>
       <div class="control-pair">
-        <input class="sector-range" type="range" min="0" max="100" step="0.1" value="${sectorWeights[sector] || 0}" />
-        <input class="sector-number" type="number" min="0" max="100" step="0.1" value="${(sectorWeights[sector] || 0).toFixed(1)}" />
+        <input class="sector-range" type="range" min="0" max="100" step="0.1" value="${draftSectorWeights[sector] || 0}" />
+        <input class="sector-number" type="number" min="0" max="100" step="0.1" value="${(draftSectorWeights[sector] || 0).toFixed(1)}" />
       </div>
       <details class="stock-controls" open>
         <summary>Stocks in ${sector} (${sectorRows.length})</summary>
@@ -373,11 +443,11 @@ function renderControls() {
     `;
     row.querySelector(".sector-range").addEventListener("input", (event) => {
       rebalanceSectors(sector, Number(event.target.value));
-      renderAll();
+      renderControls();
     });
     row.querySelector(".sector-number").addEventListener("change", (event) => {
       rebalanceSectors(sector, Number(event.target.value));
-      renderAll();
+      renderControls();
     });
     renderStockControls(row.querySelector(".stock-control-body"), sector, sectorRows);
     container.appendChild(row);
@@ -392,7 +462,7 @@ function renderStockControls(container, sector, rows) {
   if (rows.length === 1) {
     const only = rows[0];
     container.innerHTML = `<p class="muted-note"><strong>${escapeHtml(only.ticker)}</strong> receives 100% of this sector.</p>`;
-    stockShares[only.ticker] = 100;
+    draftStockShares[only.ticker] = 100;
     return;
   }
   const presetButtons = rows.length === 2
@@ -412,8 +482,8 @@ function renderStockControls(container, sector, rows) {
       ${presetButtons.map(([label]) => `<button type="button" data-preset="${escapeHtml(label)}">${escapeHtml(label)}</button>`).join("")}
     </div>
     ${rows.map((holding) => {
-      const share = stockShares[holding.ticker] ?? (100 / rows.length);
-      const portfolioShare = (sectorWeights[sector] || 0) * share / 100;
+      const share = draftStockShares[holding.ticker] ?? (100 / rows.length);
+      const portfolioShare = (draftSectorWeights[sector] || 0) * share / 100;
       return `
         <div class="stock-row" data-ticker="${escapeHtml(holding.ticker)}">
           <header><strong>${escapeHtml(holding.ticker)}</strong><span>${portfolioShare.toFixed(1)}% portfolio</span></header>
@@ -430,19 +500,20 @@ function renderStockControls(container, sector, rows) {
     button.addEventListener("click", () => {
       const found = presetButtons.find(([label]) => label === button.dataset.preset);
       if (!found) return;
-      found[1].forEach((weight, index) => { stockShares[rows[index].ticker] = weight; });
-      renderAll();
+      found[1].forEach((weight, index) => { draftStockShares[rows[index].ticker] = weight; });
+      markDraftDirty();
+      renderControls();
     });
   });
   container.querySelectorAll(".stock-row").forEach((node) => {
     const ticker = node.dataset.ticker;
     node.querySelector(".stock-range").addEventListener("input", (event) => {
       rebalanceStocks(sector, ticker, Number(event.target.value));
-      renderAll();
+      renderControls();
     });
     node.querySelector(".stock-number").addEventListener("change", (event) => {
       rebalanceStocks(sector, ticker, Number(event.target.value));
-      renderAll();
+      renderControls();
     });
   });
 }
@@ -450,30 +521,32 @@ function renderStockControls(container, sector, rows) {
 function rebalanceSectors(changed, value) {
   const capped = Math.max(0, Math.min(100, value));
   const others = SECTORS.filter((sector) => sector !== changed);
-  const otherTotal = others.reduce((sum, sector) => sum + (sectorWeights[sector] || 0), 0);
-  sectorWeights[changed] = capped;
+  const otherTotal = others.reduce((sum, sector) => sum + (draftSectorWeights[sector] || 0), 0);
+  draftSectorWeights[changed] = capped;
   const remaining = 100 - capped;
   if (otherTotal <= 0) {
-    others.forEach((sector) => { sectorWeights[sector] = remaining / others.length; });
+    others.forEach((sector) => { draftSectorWeights[sector] = remaining / others.length; });
   } else {
-    others.forEach((sector) => { sectorWeights[sector] = (sectorWeights[sector] / otherTotal) * remaining; });
+    others.forEach((sector) => { draftSectorWeights[sector] = (draftSectorWeights[sector] / otherTotal) * remaining; });
   }
+  markDraftDirty();
 }
 
 function rebalanceStocks(sector, changedTicker, value) {
   const capped = Math.max(0, Math.min(100, value));
   const rows = holdings.filter((row) => row.sector === sector);
   const others = rows.map((row) => row.ticker).filter((ticker) => ticker !== changedTicker);
-  stockShares[changedTicker] = capped;
+  draftStockShares[changedTicker] = capped;
   const remaining = 100 - capped;
-  const otherTotal = others.reduce((sum, ticker) => sum + (stockShares[ticker] || 0), 0);
+  const otherTotal = others.reduce((sum, ticker) => sum + (draftStockShares[ticker] || 0), 0);
   if (!others.length) {
-    stockShares[changedTicker] = 100;
+    draftStockShares[changedTicker] = 100;
   } else if (otherTotal <= 0) {
-    others.forEach((ticker) => { stockShares[ticker] = remaining / others.length; });
+    others.forEach((ticker) => { draftStockShares[ticker] = remaining / others.length; });
   } else {
-    others.forEach((ticker) => { stockShares[ticker] = (stockShares[ticker] / otherTotal) * remaining; });
+    others.forEach((ticker) => { draftStockShares[ticker] = (draftStockShares[ticker] / otherTotal) * remaining; });
   }
+  markDraftDirty();
 }
 
 function renderPortfolio() {
@@ -650,6 +723,110 @@ function renderComparison() {
         <td>${row.status === "Removed" ? "--" : fmtMoney(row.priceEnd)}</td>
         <td class="${toneClass(row.priceDelta)}">${fmtSignedMoney(row.priceDelta)}</td>
       </tr>`).join("")}</tbody>
+  `;
+}
+
+function yahooQuotePrice(quote) {
+  if (!quote) return NaN;
+  return Number(
+    quote.regularMarketPrice
+    ?? quote.postMarketPrice
+    ?? quote.preMarketPrice
+    ?? quote.bid
+    ?? quote.ask,
+  );
+}
+
+function quoteCurrency(quote, holding) {
+  return quote?.currency || (holding.exchange || "").split("/").at(-1)?.trim() || "";
+}
+
+function liveSymbols() {
+  return [...new Set(holdings.map((row) => row.ticker).filter(Boolean))];
+}
+
+async function fetchLiveQuotes({ silent = false } = {}) {
+  const symbols = liveSymbols();
+  if (!symbols.length || liveQuoteState.loading) return;
+  liveQuoteState = { ...liveQuoteState, loading: true, error: "", requested: symbols.length };
+  if (!silent) renderLiveMode();
+  try {
+    const response = await fetch(`/api/live-quotes?symbols=${encodeURIComponent(symbols.join(","))}`, {
+      headers: { Accept: "application/json" },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Quote request failed (${response.status})`);
+    liveQuotes = new Map((payload.quotes || []).map((quote) => [String(quote.symbol || "").toUpperCase(), quote]));
+    liveQuoteState = {
+      loading: false,
+      error: "",
+      fetchedAt: payload.fetchedAt || Math.floor(Date.now() / 1000),
+      requested: symbols.length,
+    };
+  } catch (error) {
+    liveQuoteState = {
+      ...liveQuoteState,
+      loading: false,
+      error: error instanceof Error ? error.message : "Live quote request failed.",
+    };
+  }
+  renderLiveMode();
+}
+
+function renderLiveMode() {
+  const table = $("liveQuotesTable");
+  if (!table) return;
+  const rows = activeHoldings().map((holding) => {
+    const quote = liveQuotes.get(holding.ticker.toUpperCase());
+    const livePrice = yahooQuotePrice(quote);
+    const liveReturn = holding.priceStart > 0 && Number.isFinite(livePrice) ? livePrice / holding.priceStart - 1 : NaN;
+    const moveSinceCsv = holding.priceEnd > 0 && Number.isFinite(livePrice) ? livePrice / holding.priceEnd - 1 : NaN;
+    return { ...holding, quote, livePrice, liveReturn, moveSinceCsv, liveContribution: holding.weight * liveReturn };
+  });
+  const coveredRows = rows.filter((row) => Number.isFinite(row.livePrice));
+  const livePortfolioReturn = coveredRows.reduce((sum, row) => sum + row.liveContribution, 0);
+  const csvPortfolioReturn = coveredRows.reduce((sum, row) => sum + row.weight * row.return, 0);
+  const liveMove = livePortfolioReturn - csvPortfolioReturn;
+  const coverageLabel = `${coveredRows.length}/${rows.length}`;
+
+  $("liveCoverage").textContent = coverageLabel;
+  $("livePortfolioReturn").textContent = coveredRows.length ? fmtPct(livePortfolioReturn) : "--";
+  $("livePortfolioReturn").className = toneClass(livePortfolioReturn);
+  $("livePortfolioMove").textContent = coveredRows.length ? fmtPct(liveMove, true) : "--";
+  $("livePortfolioMove").className = toneClass(liveMove);
+  $("liveUpdated").textContent = liveQuoteState.fetchedAt ? fmtDateTime(liveQuoteState.fetchedAt) : "--";
+
+  const status = $("liveStatus");
+  if (liveQuoteState.loading) {
+    status.textContent = "Refreshing Yahoo Finance quotes...";
+  } else if (liveQuoteState.error) {
+    status.textContent = liveQuoteState.error;
+  } else if (coveredRows.length) {
+    status.textContent = `Showing Yahoo Finance quotes for ${coverageLabel} loaded CSV holdings.`;
+  } else {
+    status.textContent = "Click Refresh Quotes to pull live prices for the loaded CSV tickers.";
+  }
+
+  table.innerHTML = `
+    <thead><tr><th>Ticker</th><th>Company</th><th>Exchange</th><th>Last Price</th><th>Day Change</th><th>Live Return</th><th>Since CSV End</th><th>Weight</th><th>Live Contribution</th><th>Quote Time</th></tr></thead>
+    <tbody>${rows.map((row) => {
+      const quote = row.quote;
+      const dayChange = Number(quote?.regularMarketChangePercent) / 100;
+      const url = row.url && row.url.startsWith("http") ? row.url : `https://finance.yahoo.com/quote/${row.ticker}`;
+      return `
+        <tr>
+          <td><a href="${url}" target="_blank" rel="noreferrer">${escapeHtml(row.ticker)}</a></td>
+          <td>${escapeHtml(row.company)}</td>
+          <td>${escapeHtml(quote?.fullExchangeName || row.exchange || "--")}</td>
+          <td>${quoteCurrency(quote, row)} ${fmtNumber(row.livePrice)}</td>
+          <td class="${toneClass(dayChange)}">${fmtPct(dayChange, true)}</td>
+          <td class="${toneClass(row.liveReturn)}">${fmtPct(row.liveReturn, true)}</td>
+          <td class="${toneClass(row.moveSinceCsv)}">${fmtPct(row.moveSinceCsv, true)}</td>
+          <td>${fmtPct(row.weight)}</td>
+          <td class="${toneClass(row.liveContribution)}">${fmtPct(row.liveContribution, true)}</td>
+          <td>${fmtDateTime(Number(quote?.regularMarketTime))}</td>
+        </tr>`;
+    }).join("")}</tbody>
   `;
 }
 
@@ -859,14 +1036,19 @@ function wireEvents() {
       document.querySelectorAll(".tab").forEach((tab) => tab.classList.remove("active"));
       button.classList.add("active");
       $("portfolioTab").classList.toggle("hidden", button.dataset.tab !== "portfolio");
+      $("liveTab").classList.toggle("hidden", button.dataset.tab !== "live");
       $("optionsTab").classList.toggle("hidden", button.dataset.tab !== "options");
+      if (button.dataset.tab === "live" && !liveQuotes.size && !liveQuoteState.loading) {
+        fetchLiveQuotes();
+      }
       setTimeout(() => window.dispatchEvent(new Event("resize")), 0);
     });
   });
   $("resetWeights").addEventListener("click", () => {
-    resetStateFromHoldings();
-    renderAll();
+    resetDraftFromHoldings();
   });
+  $("applyWeights").addEventListener("click", applyDraftWeights);
+  $("refreshLiveQuotes").addEventListener("click", () => fetchLiveQuotes());
   $("tickerSelect").addEventListener("change", () => renderStockDetail(portfolioStats().rows));
   $("csvUpload").addEventListener("change", async (event) => {
     const file = event.target.files?.[0];

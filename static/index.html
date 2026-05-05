@@ -65,6 +65,7 @@
 
       <nav class="tabs" aria-label="Dashboard sections">
         <button class="tab active" data-tab="portfolio">Portfolio Performance</button>
+        <button class="tab" data-tab="live">Live Mode</button>
         <button class="tab" data-tab="options">Options Strategy</button>
       </nav>
 
@@ -72,8 +73,12 @@
         <aside class="controls">
           <div class="panel-heading">
             <h2>Allocation Controls</h2>
-            <button id="resetWeights" type="button">Reset</button>
+            <div class="control-actions">
+              <button id="applyWeights" type="button">Apply Now</button>
+              <button id="resetWeights" type="button">Reset</button>
+            </div>
           </div>
+          <p id="weightApplyStatus" class="subhead">Current dashboard uses the applied portfolio weights.</p>
           <div id="sectorControls" class="control-list"></div>
         </aside>
 
@@ -122,6 +127,39 @@
             </div>
           </section>
         </div>
+      </section>
+
+      <section id="liveTab" class="tab-panel hidden">
+        <section class="panel wide">
+          <div class="panel-heading live-heading">
+            <div>
+              <h2>Live Mode</h2>
+              <p id="liveStatus" class="subhead">Live quotes refresh from Yahoo Finance for the loaded CSV tickers.</p>
+            </div>
+            <button id="refreshLiveQuotes" type="button">Refresh Quotes</button>
+          </div>
+          <section class="metrics live-metrics" aria-label="Live mode summary">
+            <div class="metric">
+              <span>Live Holdings</span>
+              <strong id="liveCoverage">--</strong>
+            </div>
+            <div class="metric">
+              <span>Live Portfolio Return</span>
+              <strong id="livePortfolioReturn">--</strong>
+            </div>
+            <div class="metric">
+              <span>Live vs CSV End</span>
+              <strong id="livePortfolioMove">--</strong>
+            </div>
+            <div class="metric">
+              <span>Last Updated</span>
+              <strong id="liveUpdated">--</strong>
+            </div>
+          </section>
+          <div class="table-wrap">
+            <table id="liveQuotesTable"></table>
+          </div>
+        </section>
       </section>
 
       <section id="optionsTab" class="tab-panel hidden">

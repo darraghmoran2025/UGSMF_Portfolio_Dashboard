@@ -282,6 +282,21 @@ button:active {
   margin-bottom: 12px;
 }
 
+.control-actions {
+  display: flex;
+  gap: 8px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+button:disabled:hover {
+  background: var(--brand-maroon);
+  border-color: var(--brand-maroon);
+}
+
 .subhead {
   color: var(--muted);
   font-size: 0.86rem;
@@ -298,6 +313,12 @@ button:active {
   background: var(--bg);
   border-color: var(--brand-maroon);
   color: var(--brand-maroon);
+}
+
+.panel-heading button:disabled:hover {
+  background: var(--panel);
+  border-color: var(--line-strong);
+  color: var(--ink);
 }
 
 .control-list {
@@ -428,6 +449,29 @@ button:active {
   gap: 12px;
   grid-template-columns: repeat(3, 1fr);
   margin: 10px 0 16px;
+}
+
+.live-heading {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.live-metrics {
+  margin: 12px 0 18px;
+}
+
+#liveTab .panel {
+  min-width: 0;
+}
+
+#liveQuotesTable a {
+  color: var(--brand-maroon-deep);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+#liveQuotesTable a:hover {
+  text-decoration: underline;
 }
 
 select,
@@ -602,7 +646,8 @@ tbody tr:hover {
 
 @media (max-width: 620px) {
   .topbar,
-  .tabs {
+  .tabs,
+  .live-heading {
     align-items: stretch;
     flex-direction: column;
   }

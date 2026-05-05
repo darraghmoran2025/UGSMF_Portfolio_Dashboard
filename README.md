@@ -7,6 +7,7 @@ Streamlit and static dashboard for a Student Managed Fund portfolio. It includes
 - Upload a portfolio CSV or use the bundled `portfolio.csv` sample.
 - Compare an uploaded reporting period against the previously loaded period.
 - Calculate holding returns, portfolio contribution, MSCI World benchmark return, and alpha.
+- Use Live Mode to refresh Yahoo Finance quotes for every ticker loaded from the CSV.
 - Pull live MSCI World benchmark data from Yahoo Finance via `yfinance`.
 - Adjust sector and within-sector weights interactively with sliders, manual inputs, and quick ratio buttons.
 - Toggle night mode from the sidebar.
@@ -55,6 +56,7 @@ The separator row rebases the buy date for holdings below it while reusing the s
 
 - `streamlit_app.py`: Streamlit application for local or Streamlit Cloud use.
 - `app.py`: Minimal Vercel ASGI entrypoint that serves the static dashboard.
+- `api/live-quotes.py`: Vercel serverless Yahoo Finance quote proxy for Live Mode.
 - `portfolio.csv`: Bundled sample data.
 - `requirements-streamlit.txt`: Python dependencies for the Streamlit app.
 - `static/`: Vercel-compatible browser dashboard, including the University of Galway SMF logo asset.

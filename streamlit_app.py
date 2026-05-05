@@ -4,7 +4,9 @@ Student Managed Fund (SMF) Portfolio Dashboard.
 Tab 1 — Portfolio Performance: read a CSV of stock prices, derive sector
 weights, returns, contributions, and benchmark comparisons (MSCI World).
 
-Tab 2 — Options Strategy & Risk Engine: Black-Scholes pricing, multi-leg
+Tab 2 - Live Mode: Yahoo Finance quote tracking for the loaded CSV holdings.
+
+Tab 3 - Options Strategy & Risk Engine: Black-Scholes pricing, multi-leg
 strategy builder (with presets), payoff diagram, volatility stress test,
 and a 2D risk heatmap (price × time decay).
 
@@ -675,6 +677,56 @@ def fetch_live_msci_world(period_start_iso: str) -> dict | None:
     return None
 
 
+@st.cache_data(ttl=60)
+def fetch_live_portfolio_quotes(tickers: tuple[str, ...]) -> dict[str, dict]:
+    """Fetch current Yahoo Finance quotes for portfolio holdings."""
+    if not _HAS_YFINANCE:
+        return {}
+
+    quotes: dict[str, dict] = {}
+    for ticker in tickers:
+        symbol = str(ticker).strip().upper()
+        if not symbol:
+            continue
+        try:
+            yf_ticker = yf.Ticker(symbol)
+            fast = yf_ticker.fast_info
+            price = fast.get("last_price") or fast.get("lastPrice")
+            previous_close = fast.get("previous_close") or fast.get("previousClose")
+            currency = fast.get("currency") or ""
+            exchange = fast.get("exchange") or ""
+        except Exception:  # pragma: no cover - network/Yahoo dependent
+            continue
+
+        if price is None or not np.isfinite(float(price)):
+            try:
+                hist = yf.Ticker(symbol).history(period="5d", interval="1d", auto_adjust=False)
+            except Exception:  # pragma: no cover - network/Yahoo dependent
+                continue
+            if hist is None or hist.empty or "Close" not in hist.columns:
+                continue
+            closes = hist["Close"].dropna()
+            if closes.empty:
+                continue
+            price = float(closes.iloc[-1])
+            previous_close = float(closes.iloc[-2]) if len(closes) > 1 else np.nan
+            currency = ""
+            exchange = ""
+
+        price_f = float(price)
+        prev_f = float(previous_close) if previous_close is not None and np.isfinite(float(previous_close)) else np.nan
+        quotes[symbol] = {
+            "symbol": symbol,
+            "price": price_f,
+            "previous_close": prev_f,
+            "day_change_pct": (price_f / prev_f - 1.0) if prev_f and prev_f > 0 else np.nan,
+            "currency": currency,
+            "exchange": exchange,
+            "fetched_at": datetime.now(timezone.utc),
+        }
+    return quotes
+
+
 # ---------------------------------------------------------------------------
 # Black-Scholes pricing & options helpers
 # ---------------------------------------------------------------------------
@@ -847,6 +899,24 @@ def _stock_num_key(ticker: str) -> str:
     return f"stock_w_num::{ticker}"
 
 
+def _normalise_weight_map(weights: dict[str, float]) -> dict[str, float]:
+    total = sum(float(v) for v in weights.values())
+    if total <= 0:
+        return weights
+    return {k: float(v) * 100.0 / total for k, v in weights.items()}
+
+
+def _current_sector_widget_weights() -> dict[str, float]:
+    return _normalise_weight_map({s: float(st.session_state.get(_slider_key(s), 0.0)) for s in SECTORS})
+
+
+def _current_stock_widget_weights() -> dict[str, float]:
+    return {
+        str(row["Ticker"]): float(st.session_state.get(_stock_slider_key(row["Ticker"]), 0.0))
+        for _, row in df.iterrows()
+    }
+
+
 if "weights_initialised" not in st.session_state:
     for s in SECTORS:
         st.session_state[_slider_key(s)] = BASELINE_WEIGHT
@@ -863,6 +933,21 @@ for s in SECTORS:
             st.session_state[sk] = 100.0 / n if n else 0.0
         if nk not in st.session_state:
             st.session_state[nk] = 100.0 / n if n else 0.0
+
+if "applied_sector_weights" not in st.session_state:
+    st.session_state["applied_sector_weights"] = _current_sector_widget_weights()
+if "applied_stock_weights" not in st.session_state:
+    st.session_state["applied_stock_weights"] = _current_stock_widget_weights()
+
+st.session_state["applied_sector_weights"] = {
+    s: float(st.session_state["applied_sector_weights"].get(s, st.session_state.get(_slider_key(s), 0.0)))
+    for s in SECTORS
+}
+applied_stock_weights_state = st.session_state["applied_stock_weights"]
+for _, _row in df.iterrows():
+    tk = str(_row["Ticker"])
+    if tk not in applied_stock_weights_state:
+        applied_stock_weights_state[tk] = float(st.session_state.get(_stock_slider_key(tk), 0.0))
 
 
 def _reset_to_equal_weight() -> None:
@@ -976,11 +1061,36 @@ def _apply_sector_preset(weights_pct: dict[str, float]) -> None:
         st.session_state[_num_key(s)] = v
 
 
+def _apply_weight_changes() -> None:
+    st.session_state["applied_sector_weights"] = _current_sector_widget_weights()
+    st.session_state["applied_stock_weights"] = _current_stock_widget_weights()
+
+
+def _has_unapplied_weight_changes() -> bool:
+    current_sectors = _current_sector_widget_weights()
+    applied_sectors = st.session_state.get("applied_sector_weights", {})
+    current_stocks = _current_stock_widget_weights()
+    applied_stocks = st.session_state.get("applied_stock_weights", {})
+    sector_dirty = any(abs(current_sectors.get(s, 0.0) - float(applied_sectors.get(s, 0.0))) > 0.001 for s in SECTORS)
+    stock_dirty = any(abs(current_stocks.get(t, 0.0) - float(applied_stocks.get(t, 0.0))) > 0.001 for t in current_stocks)
+    return sector_dirty or stock_dirty
+
+
 st.sidebar.button(
     f"Reset to equal weight (1/{len(SECTORS)} each)",
     on_click=_reset_to_equal_weight,
     use_container_width=True,
 )
+st.sidebar.button(
+    "Apply Now",
+    on_click=_apply_weight_changes,
+    disabled=not _has_unapplied_weight_changes(),
+    use_container_width=True,
+)
+if _has_unapplied_weight_changes():
+    st.sidebar.caption("Allocation edits are staged. Portfolio numbers update after Apply Now.")
+else:
+    st.sidebar.caption("Portfolio numbers use the applied weights.")
 
 for sector in SECTORS:
     st.sidebar.markdown(f"**{sector}**")
@@ -1082,42 +1192,68 @@ for sector in SECTORS:
                 if pd.notna(row.get("Yahoo_URL")):
                     st.markdown(f"[Yahoo Finance ↗]({row['Yahoo_URL']})")
 
-sector_weights = {s: float(st.session_state[_slider_key(s)]) for s in SECTORS}
-slider_total = sum(sector_weights.values())
-if slider_total > 0 and abs(slider_total - 100.0) > 1e-6:
-    factor = 100.0 / slider_total
-    sector_weights = {s: w * factor for s, w in sector_weights.items()}
-    slider_total = 100.0
+staged_sector_weights = _current_sector_widget_weights()
+sector_weights = _normalise_weight_map({
+    s: float(st.session_state["applied_sector_weights"].get(s, 0.0))
+    for s in SECTORS
+})
+applied_stock_weights = {
+    str(row["Ticker"]): float(st.session_state["applied_stock_weights"].get(str(row["Ticker"]), 0.0))
+    for _, row in df.iterrows()
+}
+slider_total = sum(staged_sector_weights.values())
 
-hypothetical_return = 0.0
-for sector, w_pct in sector_weights.items():
-    sector_stocks = df[df["Sector"] == sector]
-    if sector_stocks.empty:
-        continue
-    sector_share = w_pct / 100.0
-    shares = [
-        (row["Return"], float(st.session_state.get(_stock_slider_key(row["Ticker"]), 0.0)))
-        for _, row in sector_stocks.iterrows()
-    ]
-    total_share = sum(s for _, s in shares)
-    if total_share <= 0:
-        continue
-    for ret, share_pct in shares:
-        portfolio_weight = sector_share * (share_pct / total_share)
-        hypothetical_return += portfolio_weight * ret
+
+def _weighted_return(weight_map: dict[str, float], stock_weight_map: dict[str, float]) -> float:
+    result = 0.0
+    for sector, w_pct in weight_map.items():
+        sector_stocks = df[df["Sector"] == sector]
+        if sector_stocks.empty:
+            continue
+        sector_share = w_pct / 100.0
+        shares = [
+            (row["Return"], float(stock_weight_map.get(str(row["Ticker"]), 0.0)))
+            for _, row in sector_stocks.iterrows()
+        ]
+        total_share = sum(s for _, s in shares)
+        if total_share <= 0:
+            continue
+        for ret, share_pct in shares:
+            portfolio_weight = sector_share * (share_pct / total_share)
+            result += portfolio_weight * ret
+    return float(result)
+
+
+PORTFOLIO_RETURN = _weighted_return(sector_weights, applied_stock_weights)
+ALPHA = PORTFOLIO_RETURN - BENCHMARK_RETURN
+hypothetical_return = _weighted_return(staged_sector_weights, _current_stock_widget_weights())
 
 st.sidebar.metric("Slider Sum", f"{slider_total:.2f}%")
 st.sidebar.metric(
-    "Hypothetical Return",
+    "Staged Return",
     f"{hypothetical_return * 100:.2f}%",
-    delta=f"{(hypothetical_return - PORTFOLIO_RETURN) * 100:+.2f}% vs actual",
+    delta=f"{(hypothetical_return - PORTFOLIO_RETURN) * 100:+.2f}% vs applied",
 )
+
+
+def build_active_weight_frame() -> pd.DataFrame:
+    active_df = df.copy()
+    weights: list[float] = []
+    for _, row in active_df.iterrows():
+        sector = row["Sector"]
+        sector_share = sector_weights.get(sector, 0.0) / 100.0
+        sector_stocks = df[df["Sector"] == sector]
+        total_share = sum(float(applied_stock_weights.get(str(t), 0.0)) for t in sector_stocks["Ticker"])
+        stock_share = float(applied_stock_weights.get(str(row["Ticker"]), 0.0))
+        weights.append(sector_share * stock_share / total_share if total_share > 0 else 0.0)
+    active_df["Active_Weight"] = weights
+    return active_df
 
 
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab1, tab2 = st.tabs(["Portfolio Performance", "Options Strategy & Risk Engine"])
+tab1, tab_live, tab2 = st.tabs(["Portfolio Performance", "Live Mode", "Options Strategy & Risk Engine"])
 
 
 # =============================================================================
@@ -1307,7 +1443,76 @@ with tab1:
 
 
 # =============================================================================
-# TAB 2 — Options Strategy & Risk Engine
+# TAB 2 - Live Mode
+# =============================================================================
+with tab_live:
+    st.header("Live Mode")
+    st.caption("Yahoo Finance quotes for every holding loaded through the portfolio CSV.")
+
+    tickers = tuple(df["Ticker"].astype(str).str.upper().tolist())
+    refresh = st.button("Refresh Yahoo Finance quotes", use_container_width=False)
+    if refresh:
+        fetch_live_portfolio_quotes.clear()
+
+    live_quotes = fetch_live_portfolio_quotes(tickers)
+    active_df = build_active_weight_frame()
+    live_rows = []
+    for _, row in active_df.iterrows():
+        quote = live_quotes.get(str(row["Ticker"]).upper())
+        live_price = quote.get("price") if quote else np.nan
+        live_return = (live_price / row["Price_Start"] - 1.0) if pd.notna(live_price) and row["Price_Start"] > 0 else np.nan
+        move_since_csv = (live_price / row["Price_End"] - 1.0) if pd.notna(live_price) and row["Price_End"] > 0 else np.nan
+        live_rows.append({
+            "Ticker": row["Ticker"],
+            "Company": row["Company"],
+            "Sector": row["Sector"],
+            "Exchange": quote.get("exchange") if quote else row.get("Exchange", ""),
+            "Currency": quote.get("currency") if quote else "",
+            "Last Price": live_price,
+            "Day Change": quote.get("day_change_pct") if quote else np.nan,
+            "Live Return": live_return,
+            "Since CSV End": move_since_csv,
+            "Active Weight": row["Active_Weight"],
+            "Live Contribution": row["Active_Weight"] * live_return if pd.notna(live_return) else np.nan,
+            "Quote Time": quote.get("fetched_at") if quote else pd.NaT,
+        })
+
+    live_df = pd.DataFrame(live_rows)
+    quoted = live_df["Last Price"].notna()
+    live_portfolio_return = float(live_df.loc[quoted, "Live Contribution"].sum()) if quoted.any() else np.nan
+    csv_return_covered = float((active_df.loc[quoted, "Active_Weight"] * active_df.loc[quoted, "Return"]).sum()) if quoted.any() else np.nan
+    live_move = live_portfolio_return - csv_return_covered if pd.notna(live_portfolio_return) and pd.notna(csv_return_covered) else np.nan
+    last_quote = live_df.loc[quoted, "Quote Time"].max() if quoted.any() else None
+
+    if not _HAS_YFINANCE:
+        st.warning("Live Mode requires `yfinance`; install the dependencies in `requirements-streamlit.txt`.")
+    elif not quoted.any():
+        st.warning("Yahoo Finance returned no live quotes for the loaded tickers.")
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Live Holdings", f"{int(quoted.sum())}/{len(live_df)}")
+    m2.metric("Live Portfolio Return", "--" if pd.isna(live_portfolio_return) else f"{live_portfolio_return * 100:.2f}%")
+    m3.metric("Live vs CSV End", "--" if pd.isna(live_move) else f"{live_move * 100:+.2f}%")
+    m4.metric(
+        "Last Updated",
+        last_quote.strftime("%Y-%m-%d %H:%M UTC") if hasattr(last_quote, "strftime") else "--",
+    )
+
+    display_live = live_df.copy()
+    for col in ["Day Change", "Live Return", "Since CSV End", "Active Weight", "Live Contribution"]:
+        display_live[col] = display_live[col].map(lambda v: "--" if pd.isna(v) else f"{v * 100:+.2f}%")
+    display_live["Last Price"] = display_live.apply(
+        lambda r: "--" if pd.isna(r["Last Price"]) else f"{r['Currency']} {r['Last Price']:,.2f}".strip(),
+        axis=1,
+    )
+    display_live["Quote Time"] = display_live["Quote Time"].map(
+        lambda v: v.strftime("%Y-%m-%d %H:%M UTC") if hasattr(v, "strftime") else "--"
+    )
+    st.dataframe(display_live, use_container_width=True, hide_index=True)
+
+
+# =============================================================================
+# TAB 3 - Options Strategy & Risk Engine
 # =============================================================================
 with tab2:
     st.header("Options Strategy & Risk Engine")
