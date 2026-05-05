@@ -303,6 +303,21 @@ button:disabled:hover {
   margin: 5px 0 0;
 }
 
+.weight-warning {
+  animation: flash-warning 900ms ease;
+  color: var(--bad);
+  font-weight: 700;
+}
+
+@keyframes flash-warning {
+  0% {
+    background: rgba(180, 35, 24, 0.16);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
 .panel-heading button {
   background: var(--panel);
   border-color: var(--line-strong);

@@ -335,10 +335,36 @@ function resetDraftFromHoldings() {
 }
 
 function applyDraftWeights() {
+  const validation = validateDraftWeights();
+  if (!validation.valid) {
+    renderControls();
+    return;
+  }
   sectorWeights = cloneWeights(draftSectorWeights);
   stockShares = cloneWeights(draftStockShares);
   weightsDirty = false;
   renderAll();
+}
+
+function weightTotal(values) {
+  return Object.values(values).reduce((sum, value) => sum + (Number(value) || 0), 0);
+}
+
+function validateDraftWeights() {
+  const messages = [];
+  const sectorTotal = weightTotal(draftSectorWeights);
+  if (Math.abs(sectorTotal - 100) > 0.05) {
+    messages.push(`Sector weightings need to add to 100%. Current total is ${sectorTotal.toFixed(1)}%.`);
+  }
+  SECTORS.forEach((sector) => {
+    const rows = holdings.filter((row) => row.sector === sector);
+    if (rows.length <= 1) return;
+    const stockTotal = rows.reduce((sum, row) => sum + (Number(draftStockShares[row.ticker]) || 0), 0);
+    if (Math.abs(stockTotal - 100) > 0.05) {
+      messages.push(`${sector} stock weightings need to add to 100%. Current total is ${stockTotal.toFixed(1)}%.`);
+    }
+  });
+  return { valid: messages.length === 0, messages, sectorTotal };
 }
 
 function activeHoldings() {
@@ -416,14 +442,24 @@ function renderAll() {
 }
 
 function renderControls() {
+  const validation = validateDraftWeights();
   const status = $("weightApplyStatus");
   if (status) {
-    status.textContent = weightsDirty
-      ? "You have staged allocation changes. Dashboard numbers will update after Apply Now."
-      : "Current dashboard uses the applied portfolio weights.";
+    status.textContent = validation.valid
+      ? (weightsDirty
+        ? "You have staged allocation changes. Dashboard numbers will update after Apply Now."
+        : "Current dashboard uses the applied portfolio weights.")
+      : validation.messages[0];
+    if (validation.valid) {
+      status.className = "subhead";
+    } else {
+      status.className = "subhead";
+      void status.offsetWidth;
+      status.className = "subhead weight-warning";
+    }
   }
   const applyButton = $("applyWeights");
-  if (applyButton) applyButton.disabled = !weightsDirty;
+  if (applyButton) applyButton.disabled = !weightsDirty || !validation.valid;
   const container = $("sectorControls");
   container.innerHTML = "";
   SECTORS.forEach((sector) => {
@@ -520,31 +556,16 @@ function renderStockControls(container, sector, rows) {
 
 function rebalanceSectors(changed, value) {
   const capped = Math.max(0, Math.min(100, value));
-  const others = SECTORS.filter((sector) => sector !== changed);
-  const otherTotal = others.reduce((sum, sector) => sum + (draftSectorWeights[sector] || 0), 0);
   draftSectorWeights[changed] = capped;
-  const remaining = 100 - capped;
-  if (otherTotal <= 0) {
-    others.forEach((sector) => { draftSectorWeights[sector] = remaining / others.length; });
-  } else {
-    others.forEach((sector) => { draftSectorWeights[sector] = (draftSectorWeights[sector] / otherTotal) * remaining; });
-  }
   markDraftDirty();
 }
 
 function rebalanceStocks(sector, changedTicker, value) {
   const capped = Math.max(0, Math.min(100, value));
-  const rows = holdings.filter((row) => row.sector === sector);
-  const others = rows.map((row) => row.ticker).filter((ticker) => ticker !== changedTicker);
   draftStockShares[changedTicker] = capped;
-  const remaining = 100 - capped;
-  const otherTotal = others.reduce((sum, ticker) => sum + (draftStockShares[ticker] || 0), 0);
-  if (!others.length) {
+  const rows = holdings.filter((row) => row.sector === sector);
+  if (rows.length === 1) {
     draftStockShares[changedTicker] = 100;
-  } else if (otherTotal <= 0) {
-    others.forEach((ticker) => { draftStockShares[ticker] = remaining / others.length; });
-  } else {
-    others.forEach((ticker) => { draftStockShares[ticker] = (draftStockShares[ticker] / otherTotal) * remaining; });
   }
   markDraftDirty();
 }

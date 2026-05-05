@@ -907,7 +907,7 @@ def _normalise_weight_map(weights: dict[str, float]) -> dict[str, float]:
 
 
 def _current_sector_widget_weights() -> dict[str, float]:
-    return _normalise_weight_map({s: float(st.session_state.get(_slider_key(s), 0.0)) for s in SECTORS})
+    return {s: float(st.session_state.get(_slider_key(s), 0.0)) for s in SECTORS}
 
 
 def _current_stock_widget_weights() -> dict[str, float]:
@@ -964,50 +964,17 @@ def _reset_to_equal_weight() -> None:
 
 
 def _rebalance_others(changed_sector: str, new_val: float) -> None:
-    other_sectors = [s for s in SECTORS if s != changed_sector]
-    other_sum = sum(float(st.session_state[_slider_key(s)]) for s in other_sectors)
-    target_others = 100.0 - new_val
-    if target_others <= 0:
-        for s in other_sectors:
-            st.session_state[_slider_key(s)] = 0.0
-            st.session_state[_num_key(s)] = 0.0
-    elif other_sum <= 0:
-        equal = target_others / len(other_sectors)
-        for s in other_sectors:
-            st.session_state[_slider_key(s)] = equal
-            st.session_state[_num_key(s)] = equal
-    else:
-        scale = target_others / other_sum
-        for s in other_sectors:
-            new_v = float(st.session_state[_slider_key(s)]) * scale
-            st.session_state[_slider_key(s)] = new_v
-            st.session_state[_num_key(s)] = new_v
+    st.session_state[_slider_key(changed_sector)] = new_val
+    st.session_state[_num_key(changed_sector)] = new_val
 
 
 def _rebalance_stocks_in_sector(sector: str, changed_ticker: str, new_val: float) -> None:
     sec_stocks = df[df["Sector"] == sector]
-    other_tickers = [t for t in sec_stocks["Ticker"].tolist() if t != changed_ticker]
-    if not other_tickers:
+    st.session_state[_stock_slider_key(changed_ticker)] = new_val
+    st.session_state[_stock_num_key(changed_ticker)] = new_val
+    if len(sec_stocks) <= 1:
         st.session_state[_stock_slider_key(changed_ticker)] = 100.0
         st.session_state[_stock_num_key(changed_ticker)] = 100.0
-        return
-    other_sum = sum(float(st.session_state[_stock_slider_key(t)]) for t in other_tickers)
-    target = 100.0 - new_val
-    if target <= 0:
-        for t in other_tickers:
-            st.session_state[_stock_slider_key(t)] = 0.0
-            st.session_state[_stock_num_key(t)] = 0.0
-    elif other_sum <= 0:
-        equal = target / len(other_tickers)
-        for t in other_tickers:
-            st.session_state[_stock_slider_key(t)] = equal
-            st.session_state[_stock_num_key(t)] = equal
-    else:
-        scale = target / other_sum
-        for t in other_tickers:
-            new_v = float(st.session_state[_stock_slider_key(t)]) * scale
-            st.session_state[_stock_slider_key(t)] = new_v
-            st.session_state[_stock_num_key(t)] = new_v
 
 
 def _on_slider_change(sector: str) -> None:
@@ -1062,8 +1029,27 @@ def _apply_sector_preset(weights_pct: dict[str, float]) -> None:
 
 
 def _apply_weight_changes() -> None:
+    if not _staged_weights_valid()[0]:
+        return
     st.session_state["applied_sector_weights"] = _current_sector_widget_weights()
     st.session_state["applied_stock_weights"] = _current_stock_widget_weights()
+
+
+def _staged_weights_valid() -> tuple[bool, list[str]]:
+    messages: list[str] = []
+    current_sectors = _current_sector_widget_weights()
+    sector_total = sum(current_sectors.values())
+    if abs(sector_total - 100.0) > 0.05:
+        messages.append(f"All sector weightings need to add to 100%. Current total is {sector_total:.1f}%.")
+    current_stocks = _current_stock_widget_weights()
+    for sector in SECTORS:
+        sec_stocks = df[df["Sector"] == sector]
+        if len(sec_stocks) <= 1:
+            continue
+        stock_total = sum(float(current_stocks.get(str(t), 0.0)) for t in sec_stocks["Ticker"])
+        if abs(stock_total - 100.0) > 0.05:
+            messages.append(f"{sector} stock weightings need to add to 100%. Current total is {stock_total:.1f}%.")
+    return len(messages) == 0, messages
 
 
 def _has_unapplied_weight_changes() -> bool:
@@ -1081,13 +1067,17 @@ st.sidebar.button(
     on_click=_reset_to_equal_weight,
     use_container_width=True,
 )
+staged_valid, staged_messages = _staged_weights_valid()
+unapplied_changes = _has_unapplied_weight_changes()
 st.sidebar.button(
     "Apply Now",
     on_click=_apply_weight_changes,
-    disabled=not _has_unapplied_weight_changes(),
+    disabled=not unapplied_changes or not staged_valid,
     use_container_width=True,
 )
-if _has_unapplied_weight_changes():
+if not staged_valid:
+    st.sidebar.warning(staged_messages[0])
+elif unapplied_changes:
     st.sidebar.caption("Allocation edits are staged. Portfolio numbers update after Apply Now.")
 else:
     st.sidebar.caption("Portfolio numbers use the applied weights.")
