@@ -553,48 +553,6 @@ tbody tr:hover {
   background: rgba(138, 10, 31, 0.03);
 }
 
-.option-form {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 1.4fr repeat(5, 1fr);
-  margin-top: 12px;
-}
-
-.option-form label,
-.leg label {
-  color: var(--muted);
-  display: grid;
-  font-size: 0.78rem;
-  font-weight: 600;
-  gap: 6px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.legs {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.leg {
-  align-items: end;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 0.5fr 1fr 1fr 1fr 0.7fr;
-  padding: 12px;
-}
-
-.leg .active {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  min-height: 38px;
-}
-
 .positive {
   color: var(--good);
 }
@@ -645,7 +603,6 @@ tbody tr:hover {
   #portfolioTab,
   .dashboard-grid,
   .metrics,
-  .option-form,
   .comparison-stats {
     grid-template-columns: 1fr;
   }
@@ -654,9 +611,6 @@ tbody tr:hover {
     position: static;
   }
 
-  .leg {
-    grid-template-columns: 1fr 1fr;
-  }
 }
 
 @media (max-width: 620px) {
@@ -807,4 +761,22 @@ tbody tr:hover {
   .ledger-form .span-2 {
     grid-column: auto;
   }
+}
+
+.admin-field {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.82rem;
+  font-weight: 600;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.admin-field input {
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--ink);
+  min-height: 38px;
+  padding: 7px 9px;
 }

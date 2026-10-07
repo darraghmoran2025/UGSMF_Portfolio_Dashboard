@@ -6,7 +6,7 @@
     <title>UGSMF Portfolio Dashboard | University of Galway Student Managed Fund</title>
     <meta
       name="description"
-      content="University of Galway Student Managed Fund — portfolio performance and options strategy dashboard."
+      content="University of Galway Student Managed Fund — live portfolio performance dashboard."
     />
     <link rel="icon" type="image/png" href="/assets/ug-smf-logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -29,7 +29,7 @@
           alt="University of Galway Student Managed Fund"
         />
         <div class="brand-text">
-          <p class="eyebrow">Portfolio &amp; Options Analytics</p>
+          <p class="eyebrow">Portfolio Analytics</p>
           <h1>Portfolio Dashboard</h1>
           <div class="brand-divider" aria-hidden="true"></div>
           <p class="subbrand">Student Managed Fund</p>
@@ -67,7 +67,6 @@
       <nav class="tabs" aria-label="Dashboard sections">
         <button class="tab active" data-tab="portfolio">Portfolio Performance</button>
         <button class="tab" data-tab="live">Live Mode</button>
-        <button class="tab" data-tab="options">Options Strategy</button>
         <button class="tab" data-tab="ledger">Website Ledger</button>
       </nav>
 
@@ -80,6 +79,9 @@
               <button id="resetWeights" type="button">Reset</button>
             </div>
           </div>
+          <label class="admin-field">Admin password
+            <input id="adminPassword" type="password" autocomplete="current-password" placeholder="Required to update the website" />
+          </label>
           <p id="weightApplyStatus" class="subhead">Current dashboard uses the applied portfolio weights.</p>
           <div id="sectorControls" class="control-list"></div>
         </aside>
@@ -136,7 +138,7 @@
           <div class="panel-heading live-heading">
             <div>
               <h2>Live Mode</h2>
-              <p id="liveStatus" class="subhead">Live quotes refresh from Yahoo Finance for the loaded CSV tickers.</p>
+              <p id="liveStatus" class="subhead">Live quotes refresh from Yahoo Finance every minute for the fund's holdings.</p>
             </div>
             <button id="refreshLiveQuotes" type="button">Refresh Quotes</button>
           </div>
@@ -161,53 +163,6 @@
           <div class="table-wrap">
             <table id="liveQuotesTable"></table>
           </div>
-        </section>
-      </section>
-
-      <section id="optionsTab" class="tab-panel hidden">
-        <section class="panel wide">
-          <h2>Options Setup</h2>
-          <div class="option-form">
-            <label>Ticker<select id="optionTicker"></select></label>
-            <label>Spot<input id="spotInput" type="number" min="0.01" step="0.01" /></label>
-            <label>IV %<input id="ivInput" type="number" min="0.1" step="0.1" value="25" /></label>
-            <label>Risk-free %<input id="rateInput" type="number" min="0" step="0.25" value="4" /></label>
-            <label>Days<input id="daysInput" type="number" min="1" step="1" value="30" /></label>
-            <label>Preset<select id="presetSelect"></select></label>
-          </div>
-        </section>
-
-        <section class="panel wide">
-          <h2>Strategy Legs</h2>
-          <div id="legs" class="legs"></div>
-        </section>
-
-        <section class="metrics" aria-label="Options summary">
-          <div class="metric">
-            <span>Net Premium</span>
-            <strong id="netPremium">--</strong>
-          </div>
-          <div class="metric">
-            <span>Max Profit</span>
-            <strong id="maxProfit">--</strong>
-          </div>
-          <div class="metric">
-            <span>Max Loss</span>
-            <strong id="maxLoss">--</strong>
-          </div>
-          <div class="metric">
-            <span>Break-even</span>
-            <strong id="breakeven">--</strong>
-          </div>
-        </section>
-
-        <section class="panel wide">
-          <h2>Payoff Diagram</h2>
-          <div id="payoffChart" class="chart"></div>
-        </section>
-        <section class="panel wide">
-          <h2>Risk Heatmap</h2>
-          <div id="heatmapChart" class="chart"></div>
         </section>
       </section>
 
@@ -296,11 +251,11 @@
           ·
           <a href="https://universityofgalwaysmf.com/" target="_blank" rel="noopener">universityofgalwaysmf.com</a>
         </div>
-        <div>Portfolio &amp; Options Analytics Dashboard</div>
+        <div>Portfolio Analytics Dashboard</div>
       </div>
       <p class="footer-disclaimer">
         For educational use by members of the University of Galway Student Managed Fund. Figures are
-        derived from the loaded CSV and Black–Scholes pricing assumptions and are not investment advice.
+        paper trades priced live from Yahoo Finance and are not investment advice.
       </p>
     </footer>
   </body>

@@ -235,6 +235,8 @@
       if (!response.ok) { showErrors(payload.errors || []); throw new Error(payload.error); }
       ledger = structuredClone(payload.ledger);
       renderLedger();
+      try { sessionStorage.setItem("smf-admin-password", el("ledgerPassword").value); } catch { /* storage unavailable */ }
+      window.dispatchEvent(new CustomEvent("smf-ledger-saved"));
       setStatus("ledgerPublishStatus", `Published ${new Date(payload.ledger.updatedAt).toLocaleString()}. The website picks it up within about a minute.`);
     } catch (error) {
       setStatus("ledgerPublishStatus", error.message || "Publish failed.", true);
@@ -263,6 +265,9 @@
     el("ledgerReload").addEventListener("click", loadLedger);
     el("ledgerPreview").addEventListener("click", preview);
     el("ledgerPublishForm").addEventListener("submit", publish);
+    try { el("ledgerPassword").value = sessionStorage.getItem("smf-admin-password") || ""; } catch { /* storage unavailable */ }
+    // Apply Now on the Portfolio tab published new weights: show them here.
+    window.addEventListener("smf-ledger-published", loadLedger);
     loadLedger();
   });
 })();

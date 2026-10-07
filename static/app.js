@@ -1,4 +1,4 @@
-const SECTORS = [
+let SECTORS = [
   "Industrials",
   "Consumer",
   "Technology",
@@ -23,12 +23,11 @@ const TICKER_TO_SECTOR = {
   BYDDF: "Consumer",
   PG: "Consumer",
   "1211.HK": "Consumer",
+  "BY6.F": "Consumer",
   ALIZY: "Financials",
   "ALV.DE": "Financials",
   V: "Financials",
 };
-
-const PRESETS = ["Custom", "Bull Call Spread", "Iron Condor", "Straddle"];
 
 let holdings = [];
 let benchmark = {
@@ -43,7 +42,13 @@ let stockShares = {};
 let draftSectorWeights = {};
 let draftStockShares = {};
 let weightsDirty = false;
-let optionTickerSignature = "";
+// "ledger": holdings come live from the published ledger via /api/performance.
+// "csv": an uploaded CSV snapshot (allocation changes stay on the dashboard).
+let dataSource = "ledger";
+let publishedLedger = null;
+let engine = null;
+const LIVE_REFRESH_MS = 60_000;
+const ADMIN_PASSWORD_KEY = "smf-admin-password";
 let loadedSnapshot = null;
 let uploadComparison = null;
 let liveQuotes = new Map();
@@ -175,6 +180,8 @@ function cleanNumber(value) {
 }
 
 function loadPortfolio(text, { compare = false } = {}) {
+  dataSource = "csv";
+  engine = null;
   const previousSnapshot = compare ? loadedSnapshot : null;
   const rows = parseCsv(text);
   const metaStart = rows.find((row) => row[0]?.toLowerCase() === "period start");
@@ -302,6 +309,7 @@ function sameWeights(left, right) {
 }
 
 function buildWeightsFromHoldings() {
+  if (dataSource === "ledger" && publishedLedger) return buildWeightsFromLedger(publishedLedger);
   const nextSectorWeights = Object.fromEntries(SECTORS.map((sector) => [sector, 0]));
   holdings.forEach((row) => { nextSectorWeights[row.sector] = (nextSectorWeights[row.sector] || 0) + row.weight * 100; });
   const nextStockShares = {};
@@ -309,6 +317,20 @@ function buildWeightsFromHoldings() {
     const rows = holdings.filter((row) => row.sector === sector);
     const total = rows.reduce((sum, row) => sum + row.weight, 0);
     rows.forEach((row) => { nextStockShares[row.ticker] = total ? (row.weight / total) * 100 : 100 / rows.length; });
+  });
+  return { sector: nextSectorWeights, stock: nextStockShares };
+}
+
+function buildWeightsFromLedger(ledger) {
+  const nextSectorWeights = Object.fromEntries(ledger.sectors.map((sector) => [sector.name, Number(sector.weight) || 0]));
+  const nextStockShares = {};
+  ledger.sectors.forEach((sector) => {
+    const held = ledger.holdings.filter((holding) => holding.sector === sector.name && !holding.sellDate);
+    const explicit = held.every((holding) => Number(holding.share) > 0);
+    const total = held.reduce((sum, holding) => sum + (explicit ? Number(holding.share) : 1), 0);
+    held.forEach((holding) => {
+      nextStockShares[holding.ticker] = total ? ((explicit ? Number(holding.share) : 1) / total) * 100 : 0;
+    });
   });
   return { sector: nextSectorWeights, stock: nextStockShares };
 }
@@ -334,10 +356,14 @@ function resetDraftFromHoldings() {
   renderControls();
 }
 
-function applyDraftWeights() {
+async function applyDraftWeights() {
   const validation = validateDraftWeights();
   if (!validation.valid) {
     renderControls();
+    return;
+  }
+  if (dataSource === "ledger" && publishedLedger) {
+    await applyToLedger();
     return;
   }
   sectorWeights = cloneWeights(draftSectorWeights);
@@ -372,12 +398,18 @@ function activeHoldings() {
     const sectorWeight = (sectorWeights[row.sector] || 0) / 100;
     const share = (stockShares[row.ticker] || 0) / 100;
     const weight = sectorWeight * share;
-    return { ...row, weight, contribution: weight * row.return };
+    // Ledger holdings carry the engine's contribution, which accounts for
+    // re-splitting each sector on later buy dates.
+    const contribution = Number.isFinite(row.engineContribution) ? row.engineContribution : weight * row.return;
+    return { ...row, weight, contribution };
   });
 }
 
 function portfolioStats() {
   const rows = activeHoldings();
+  if (dataSource === "ledger" && engine) {
+    return { rows, portfolioReturn: engine.portfolioReturn, benchmarkReturn: engine.benchmark.return ?? NaN, alpha: engine.alpha ?? NaN };
+  }
   const portfolioReturn = rows.reduce((sum, row) => sum + row.contribution, 0);
   const benchmarkReturn = benchmark.available && benchmark.start ? benchmark.end / benchmark.start - 1 : NaN;
   const alpha = Number.isFinite(benchmarkReturn) ? portfolioReturn - benchmarkReturn : NaN;
@@ -438,7 +470,135 @@ function renderAll() {
   renderControls();
   renderPortfolio();
   renderLiveMode();
-  renderOptions();
+}
+
+// ---- Live ledger data -------------------------------------------------------
+
+function storedAdminPassword() {
+  try { return sessionStorage.getItem(ADMIN_PASSWORD_KEY) || ""; } catch { return ""; }
+}
+
+function rememberAdminPassword(value) {
+  try { sessionStorage.setItem(ADMIN_PASSWORD_KEY, value); } catch { /* storage unavailable */ }
+}
+
+async function computeLedger(ledger) {
+  const response = await fetch("/api/performance", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(ledger),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error((payload.errors || [])[0] || payload.error || "Could not compute performance.");
+  return payload;
+}
+
+function useEngineResult(result, ledger, { resetWeights }) {
+  engine = result;
+  SECTORS = ledger.sectors.map((sector) => sector.name);
+  holdings = result.holdings
+    .filter((row) => row.status === "held")
+    .map((row) => ({
+      sector: row.sector,
+      ticker: row.ticker,
+      company: row.company,
+      exchange: row.currency,
+      priceStart: row.buyPrice,
+      priceEnd: row.price,
+      weight: row.weight,
+      return: row.return,
+      engineContribution: row.contribution,
+      url: `https://finance.yahoo.com/quote/${encodeURIComponent(row.ticker)}`,
+      buyDate: row.buyDate,
+    }));
+  periodStart = result.inception;
+  periodEnd = `${result.asOfDay} (live)`;
+  benchmark = { name: result.benchmark.name, start: NaN, end: NaN, available: Number.isFinite(result.benchmark.return) };
+  if (resetWeights) resetStateFromHoldings();
+  loadedSnapshot = buildSnapshot(activeHoldings(), benchmark, periodStart, periodEnd);
+  uploadComparison = null;
+  renderAll();
+}
+
+async function loadLiveLedger() {
+  const response = await fetch("/api/portfolio", { cache: "no-store" });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || "Could not load the ledger.");
+  dataSource = "ledger";
+  publishedLedger = payload.ledger;
+  useEngineResult(await computeLedger(publishedLedger), publishedLedger, { resetWeights: true });
+  fetchLiveQuotes({ silent: true });
+}
+
+// The ledger the dashboard is currently showing: published, or applied locally without a password.
+let shownLedger = null;
+
+// Re-price the shown ledger every minute without touching staged allocation changes.
+async function refreshLivePrices() {
+  if (dataSource !== "ledger" || !publishedLedger || document.hidden) return;
+  const ledger = shownLedger || publishedLedger;
+  try {
+    useEngineResult(await computeLedger(ledger), ledger, { resetWeights: false });
+    fetchLiveQuotes({ silent: true });
+  } catch (error) {
+    console.warn("Live refresh failed", error);
+  }
+}
+
+function ledgerWithDraftWeights() {
+  const ledger = structuredClone(publishedLedger);
+  ledger.sectors = ledger.sectors.map((sector) => ({ ...sector, weight: Number((draftSectorWeights[sector.name] || 0).toFixed(4)) }));
+  ledger.holdings = ledger.holdings.map((holding) => {
+    const next = { ...holding };
+    const held = ledger.holdings.filter((other) => other.sector === holding.sector && !other.sellDate);
+    if (!holding.sellDate && held.length > 1) next.share = Number((draftStockShares[holding.ticker] || 0).toFixed(4));
+    else delete next.share;
+    return next;
+  });
+  return ledger;
+}
+
+function setApplyStatus(text, isError = false) {
+  const status = $("weightApplyStatus");
+  status.textContent = text;
+  status.className = isError ? "subhead weight-warning" : "subhead";
+}
+
+async function applyToLedger() {
+  const password = $("adminPassword").value;
+  const ledger = ledgerWithDraftWeights();
+  $("applyWeights").disabled = true;
+  try {
+    if (password) {
+      setApplyStatus("Publishing to the website…");
+      const response = await fetch("/api/portfolio", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        body: JSON.stringify(ledger),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error((payload.errors || [])[0] || payload.error || "Publish failed.");
+      rememberAdminPassword(password);
+      publishedLedger = payload.ledger;
+      shownLedger = null;
+      useEngineResult(await computeLedger(publishedLedger), publishedLedger, { resetWeights: true });
+      setApplyStatus(`Applied and published to the website at ${new Date().toLocaleTimeString()}. The site updates within about a minute.`);
+      window.dispatchEvent(new CustomEvent("smf-ledger-published"));
+    } else {
+      setApplyStatus("Calculating…");
+      const result = await computeLedger(ledger);
+      sectorWeights = cloneWeights(draftSectorWeights);
+      stockShares = cloneWeights(draftStockShares);
+      shownLedger = ledger;
+      useEngineResult(result, ledger, { resetWeights: false });
+      weightsDirty = false;
+      setApplyStatus("Applied on the dashboard only — the website is unchanged. Enter the admin password and press Apply Now to publish.", true);
+    }
+  } catch (error) {
+    setApplyStatus(error.message || "Apply failed.", true);
+  } finally {
+    $("applyWeights").disabled = false;
+  }
 }
 
 function renderControls() {
@@ -823,9 +983,9 @@ function renderLiveMode() {
   } else if (liveQuoteState.error) {
     status.textContent = liveQuoteState.error;
   } else if (coveredRows.length) {
-    status.textContent = `Showing Yahoo Finance quotes for ${coverageLabel} loaded CSV holdings.`;
+    status.textContent = `Showing Yahoo Finance quotes for ${coverageLabel} holdings. Refreshes every minute.`;
   } else {
-    status.textContent = "Click Refresh Quotes to pull live prices for the loaded CSV tickers.";
+    status.textContent = "Click Refresh Quotes to pull live prices for the fund's holdings.";
   }
 
   table.innerHTML = `
@@ -851,197 +1011,6 @@ function renderLiveMode() {
   `;
 }
 
-function normCdf(x) {
-  const sign = x < 0 ? -1 : 1;
-  const z = Math.abs(x) / Math.SQRT2;
-  const t = 1 / (1 + 0.3275911 * z);
-  const erf = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-z * z);
-  return 0.5 * (1 + sign * erf);
-}
-
-function normPdf(x) {
-  return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
-}
-
-function bsPriceGreeks(S, K, T, r, sigma, type) {
-  const isCall = type === "Call";
-  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) {
-    const price = isCall ? Math.max(S - K, 0) : Math.max(K - S, 0);
-    return { price, delta: 0, gamma: 0, theta: 0, vega: 0 };
-  }
-  const sqrtT = Math.sqrt(T);
-  const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * sqrtT);
-  const d2 = d1 - sigma * sqrtT;
-  const disc = Math.exp(-r * T);
-  const price = isCall ? S * normCdf(d1) - K * disc * normCdf(d2) : K * disc * normCdf(-d2) - S * normCdf(-d1);
-  const delta = isCall ? normCdf(d1) : normCdf(d1) - 1;
-  const gamma = normPdf(d1) / (S * sigma * sqrtT);
-  const thetaYear = isCall
-    ? -(S * normPdf(d1) * sigma) / (2 * sqrtT) - r * K * disc * normCdf(d2)
-    : -(S * normPdf(d1) * sigma) / (2 * sqrtT) + r * K * disc * normCdf(-d2);
-  return { price, delta, gamma, theta: thetaYear / 365, vega: (S * normPdf(d1) * sqrtT) / 100 };
-}
-
-function optionPrice(S, K, T, r, sigma, type) {
-  return bsPriceGreeks(S, K, T, r, sigma, type).price;
-}
-
-function renderOptions() {
-  const { rows } = portfolioStats();
-  const tickerSelect = $("optionTicker");
-  const signature = rows.map((row) => row.ticker).join("|");
-  if (signature !== optionTickerSignature) {
-    const previous = tickerSelect.value;
-    tickerSelect.innerHTML = rows.map((row) => `<option value="${row.ticker}">${row.ticker}</option>`).join("");
-    $("presetSelect").innerHTML = PRESETS.map((preset) => `<option>${preset}</option>`).join("");
-    tickerSelect.value = rows.some((row) => row.ticker === previous) ? previous : rows[0]?.ticker || "";
-    const selected = rows.find((row) => row.ticker === tickerSelect.value) || rows[0];
-    $("spotInput").value = selected?.priceEnd?.toFixed(2) || "100.00";
-    optionTickerSignature = signature;
-    renderLegs(true);
-  }
-  renderLegs();
-  calculateOptions();
-}
-
-function defaultLegs() {
-  const spot = Number($("spotInput").value) || 100;
-  return [
-    { enabled: true, action: "Buy", type: "Call", strike: spot, qty: 1 },
-    { enabled: false, action: "Sell", type: "Call", strike: spot * 1.05, qty: 1 },
-    { enabled: false, action: "Sell", type: "Put", strike: spot * 0.95, qty: 1 },
-    { enabled: false, action: "Buy", type: "Put", strike: spot, qty: 1 },
-  ];
-}
-
-function presetLegs(preset) {
-  const spot = Number($("spotInput").value) || 100;
-  const sigma = (Number($("ivInput").value) || 25) / 100;
-  const days = Number($("daysInput").value) || 30;
-  const move = spot * sigma * Math.sqrt(days / 365);
-  if (preset === "Bull Call Spread") {
-    return [
-      { enabled: true, action: "Buy", type: "Call", strike: spot - 0.5 * move, qty: 1 },
-      { enabled: true, action: "Sell", type: "Call", strike: spot + 0.5 * move, qty: 1 },
-      { enabled: false, action: "Buy", type: "Call", strike: spot, qty: 1 },
-      { enabled: false, action: "Buy", type: "Call", strike: spot, qty: 1 },
-    ];
-  }
-  if (preset === "Iron Condor") {
-    return [
-      { enabled: true, action: "Buy", type: "Put", strike: spot - 2 * move, qty: 1 },
-      { enabled: true, action: "Sell", type: "Put", strike: spot - move, qty: 1 },
-      { enabled: true, action: "Sell", type: "Call", strike: spot + move, qty: 1 },
-      { enabled: true, action: "Buy", type: "Call", strike: spot + 2 * move, qty: 1 },
-    ];
-  }
-  if (preset === "Straddle") {
-    return [
-      { enabled: true, action: "Buy", type: "Call", strike: spot, qty: 1 },
-      { enabled: true, action: "Buy", type: "Put", strike: spot, qty: 1 },
-      { enabled: false, action: "Buy", type: "Call", strike: spot, qty: 1 },
-      { enabled: false, action: "Buy", type: "Call", strike: spot, qty: 1 },
-    ];
-  }
-  return defaultLegs();
-}
-
-function renderLegs(forcePreset = false) {
-  const container = $("legs");
-  if (container.children.length && !forcePreset) return;
-  const legs = forcePreset ? presetLegs($("presetSelect").value) : defaultLegs();
-  container.innerHTML = legs.map((leg, index) => `
-    <div class="leg" data-leg="${index}">
-      <label class="active"><input type="checkbox" class="leg-enabled" ${leg.enabled ? "checked" : ""} /> Leg ${index + 1}</label>
-      <label>Action<select class="leg-action"><option ${leg.action === "Buy" ? "selected" : ""}>Buy</option><option ${leg.action === "Sell" ? "selected" : ""}>Sell</option></select></label>
-      <label>Type<select class="leg-type"><option ${leg.type === "Call" ? "selected" : ""}>Call</option><option ${leg.type === "Put" ? "selected" : ""}>Put</option></select></label>
-      <label>Strike<input class="leg-strike" type="number" min="0.01" step="0.01" value="${leg.strike.toFixed(2)}" /></label>
-      <label>Qty<input class="leg-qty" type="number" min="1" step="1" value="${leg.qty}" /></label>
-    </div>
-  `).join("");
-  container.querySelectorAll("input,select").forEach((el) => el.addEventListener("input", calculateOptions));
-}
-
-function readLegs() {
-  return [...document.querySelectorAll(".leg")]
-    .map((el) => ({
-      enabled: el.querySelector(".leg-enabled").checked,
-      action: el.querySelector(".leg-action").value,
-      type: el.querySelector(".leg-type").value,
-      strike: Number(el.querySelector(".leg-strike").value),
-      qty: Number(el.querySelector(".leg-qty").value) || 1,
-    }))
-    .filter((leg) => leg.enabled && leg.strike > 0);
-}
-
-function calculateOptions() {
-  const spot = Number($("spotInput").value) || 100;
-  const sigma = Math.max(0.001, (Number($("ivInput").value) || 25) / 100);
-  const r = (Number($("rateInput").value) || 0) / 100;
-  const days = Math.max(1, Number($("daysInput").value) || 30);
-  const T = days / 365;
-  const legs = readLegs().map((leg) => ({ ...leg, price: optionPrice(spot, leg.strike, T, r, sigma, leg.type) }));
-  const prices = Array.from({ length: 241 }, (_, i) => Math.max(0.01, spot * 0.5 + (spot * i) / 240));
-  const expiry = prices.map((S) => legs.reduce((sum, leg) => {
-    const intrinsic = leg.type === "Call" ? Math.max(S - leg.strike, 0) : Math.max(leg.strike - S, 0);
-    const sign = leg.action === "Buy" ? 1 : -1;
-    return sum + sign * (intrinsic - leg.price) * leg.qty;
-  }, 0));
-  const today = prices.map((S) => legs.reduce((sum, leg) => {
-    const sign = leg.action === "Buy" ? 1 : -1;
-    return sum + sign * (optionPrice(S, leg.strike, T, r, sigma, leg.type) - leg.price) * leg.qty;
-  }, 0));
-  const premium = legs.reduce((sum, leg) => sum + (leg.action === "Buy" ? 1 : -1) * leg.price * leg.qty, 0);
-  $("netPremium").textContent = fmtMoney(premium);
-  $("maxProfit").textContent = fmtMoney(Math.max(...expiry));
-  $("maxLoss").textContent = fmtMoney(Math.min(...expiry));
-  $("breakeven").textContent = findBreakevens(prices, expiry).map(fmtMoney).join(", ") || "--";
-
-  Plotly.react("payoffChart", [
-    { type: "scatter", mode: "lines", name: "At expiration", x: prices, y: expiry, line: { color: "#0f766e", width: 3 } },
-    { type: "scatter", mode: "lines", name: "Today", x: prices, y: today, line: { color: "#d97706", dash: "dash" } },
-  ], {
-    ...layout("Payoff", "P&L per share"),
-    xaxis: { title: "Underlying price" },
-    shapes: [
-      { type: "line", xref: "paper", x0: 0, x1: 1, y0: 0, y1: 0, line: { color: "#667085" } },
-      { type: "line", yref: "paper", y0: 0, y1: 1, x0: spot, x1: spot, line: { color: "#17202a", dash: "dot" } },
-    ],
-  }, plotConfig);
-
-  const priceChanges = Array.from({ length: 21 }, (_, i) => -0.2 + i * 0.02);
-  const daysGrid = Array.from({ length: 21 }, (_, i) => days - (days * i) / 20);
-  const z = daysGrid.map((remaining) => priceChanges.map((chg) => {
-    const S = spot * (1 + chg);
-    const t = Math.max(0.000001, remaining / 365);
-    return legs.reduce((sum, leg) => {
-      const sign = leg.action === "Buy" ? 1 : -1;
-      return sum + sign * (optionPrice(S, leg.strike, t, r, sigma, leg.type) - leg.price) * leg.qty;
-    }, 0);
-  }));
-  const maxAbs = Math.max(1, ...z.flat().map(Math.abs));
-  Plotly.react("heatmapChart", [{
-    type: "heatmap",
-    z,
-    x: priceChanges.map((chg) => `${(chg * 100).toFixed(0)}%`),
-    y: daysGrid.map((d) => `${Math.round(d)}d`),
-    colorscale: "RdYlGn",
-    zmin: -maxAbs,
-    zmax: maxAbs,
-  }], layout("Risk heatmap", "Days remaining"), plotConfig);
-}
-
-function findBreakevens(xs, ys) {
-  const points = [];
-  for (let i = 0; i < ys.length - 1; i += 1) {
-    if (ys[i] === 0) points.push(xs[i]);
-    if (Math.sign(ys[i]) !== Math.sign(ys[i + 1])) {
-      points.push(xs[i] - ys[i] * (xs[i + 1] - xs[i]) / (ys[i + 1] - ys[i]));
-    }
-  }
-  return points;
-}
-
 function wireEvents() {
   const savedTheme = localStorage.getItem("smf-theme");
   if (savedTheme === "dark") document.body.dataset.theme = "dark";
@@ -1058,7 +1027,6 @@ function wireEvents() {
       button.classList.add("active");
       $("portfolioTab").classList.toggle("hidden", button.dataset.tab !== "portfolio");
       $("liveTab").classList.toggle("hidden", button.dataset.tab !== "live");
-      $("optionsTab").classList.toggle("hidden", button.dataset.tab !== "options");
       $("ledgerTab").classList.toggle("hidden", button.dataset.tab !== "ledger");
       if (button.dataset.tab === "live" && !liveQuotes.size && !liveQuoteState.loading) {
         fetchLiveQuotes();
@@ -1076,21 +1044,24 @@ function wireEvents() {
     const file = event.target.files?.[0];
     if (file) loadPortfolio(await file.text(), { compare: true });
   });
-  $("optionTicker").addEventListener("change", () => {
-    const row = portfolioStats().rows.find((item) => item.ticker === $("optionTicker").value);
-    if (row) $("spotInput").value = row.priceEnd.toFixed(2);
-    renderLegs(true);
-    calculateOptions();
-  });
-  ["spotInput", "ivInput", "rateInput", "daysInput"].forEach((id) => $(id).addEventListener("input", calculateOptions));
-  $("presetSelect").addEventListener("change", () => {
-    renderLegs(true);
-    calculateOptions();
-  });
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
   wireEvents();
-  const response = await fetch("/portfolio.csv");
-  loadPortfolio(await response.text());
+  $("adminPassword").value = storedAdminPassword();
+  try {
+    await loadLiveLedger();
+  } catch (error) {
+    console.warn("Live ledger unavailable, falling back to portfolio.csv", error);
+    const response = await fetch("/portfolio.csv");
+    loadPortfolio(await response.text());
+    setApplyStatus("Live data is unavailable — showing the bundled portfolio.csv snapshot.", true);
+  }
+  setInterval(refreshLivePrices, LIVE_REFRESH_MS);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshLivePrices(); });
+  // The Website Ledger tab published new holdings: reload them here.
+  window.addEventListener("smf-ledger-saved", () => {
+    shownLedger = null;
+    loadLiveLedger().catch((error) => setApplyStatus(error.message, true));
+  });
 });
