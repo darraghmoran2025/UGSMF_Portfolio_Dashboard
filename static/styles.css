@@ -444,8 +444,7 @@ button:disabled:hover {
   margin-top: 18px;
 }
 
-.risk-grid div,
-.comparison-stats div {
+.risk-grid div {
   background: var(--bg);
   border: 1px solid var(--line);
   border-left: 3px solid var(--brand-maroon);
@@ -453,17 +452,9 @@ button:disabled:hover {
   padding: 13px;
 }
 
-.risk-grid strong,
-.comparison-stats strong {
+.risk-grid strong {
   font-size: 1.2rem;
   font-weight: 700;
-}
-
-.comparison-stats {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(3, 1fr);
-  margin: 10px 0 16px;
 }
 
 .live-heading {
@@ -602,8 +593,7 @@ tbody tr:hover {
 @media (max-width: 1050px) {
   #portfolioTab,
   .dashboard-grid,
-  .metrics,
-  .comparison-stats {
+  .metrics {
     grid-template-columns: 1fr;
   }
 

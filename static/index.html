@@ -36,10 +36,6 @@
         </div>
       </div>
       <div class="header-actions">
-        <label class="upload-button">
-          Upload CSV
-          <input id="csvUpload" type="file" accept=".csv,text/csv" />
-        </label>
         <button id="themeToggle" class="theme-toggle" type="button">Night mode</button>
       </div>
     </header>
@@ -99,18 +95,6 @@
             <h2>Stock Returns vs Benchmark</h2>
             <div id="returnsChart" class="chart chart-short"></div>
           </section>
-          <section id="comparisonPanel" class="panel wide hidden">
-            <div class="panel-heading">
-              <div>
-                <h2>Reporting Period Change</h2>
-                <p id="comparisonTitle" class="subhead"></p>
-              </div>
-            </div>
-            <div id="comparisonStats" class="comparison-stats"></div>
-            <div class="table-wrap">
-              <table id="comparisonTable"></table>
-            </div>
-          </section>
           <section class="panel">
             <h2>Risk Snapshot</h2>
             <div class="risk-grid">
@@ -148,11 +132,11 @@
               <strong id="liveCoverage">--</strong>
             </div>
             <div class="metric">
-              <span>Live Portfolio Return</span>
+              <span>Portfolio Return</span>
               <strong id="livePortfolioReturn">--</strong>
             </div>
             <div class="metric">
-              <span>Live vs CSV End</span>
+              <span>Today&#39;s Move</span>
               <strong id="livePortfolioMove">--</strong>
             </div>
             <div class="metric">

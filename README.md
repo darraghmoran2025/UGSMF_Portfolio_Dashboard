@@ -1,18 +1,16 @@
 # SMF Portfolio Dashboard
 
-Streamlit and static dashboard for a Student Managed Fund portfolio. It includes portfolio performance analysis, sector and holding weight controls, upload-to-upload reporting period comparisons, benchmark comparison when supplied, and an options strategy risk engine using Black-Scholes pricing.
+Live portfolio dashboard for the University of Galway Student Managed Fund (deployed on Vercel), plus an
+older Streamlit app (`streamlit_app.py`) that still reads `portfolio.csv`.
 
-## Features
+## Features (Vercel dashboard)
 
-- Upload a portfolio CSV or use the bundled `portfolio.csv` sample.
-- Compare an uploaded reporting period against the previously loaded period.
-- Calculate holding returns, portfolio contribution, MSCI World benchmark return, and alpha.
-- Use Live Mode to refresh Yahoo Finance quotes for every ticker loaded from the CSV.
-- Pull live MSCI World benchmark data from Yahoo Finance via `yfinance`.
-- Adjust sector and within-sector weights interactively with sliders, manual inputs, and quick ratio buttons.
-- Toggle night mode from the sidebar.
-- View return, contribution, volatility, and stock-level charts.
-- Build basic multi-leg options strategies and inspect payoff, Greeks, volatility stress, and risk heatmaps.
+- Trades are entered manually in the **Website Ledger** tab; there is no CSV upload.
+- Holdings are priced live from Yahoo Finance and re-priced every minute.
+- Portfolio return, contribution and alpha against the MSCI World Index, computed by the same engine as the website.
+- Sector and within-sector weight controls; **Apply Now** with the admin password publishes them to the website.
+- Live Mode shows each holding's live quote, day change, return since buy and contribution.
+- Night mode.
 
 ## Website Ledger (feeds universityofgalwaysmf.com)
 
