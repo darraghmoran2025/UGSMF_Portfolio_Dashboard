@@ -43,7 +43,8 @@ API (Node functions in `api/`):
 
 Required Vercel setup for publishing:
 
-1. Create a Vercel Blob store and connect it to this project (adds `BLOB_READ_WRITE_TOKEN`).
+1. Create a private Vercel Blob store and connect it to this project with the `BLOB` prefix (adds
+   `BLOB_STORE_ID` for keyless OIDC access, or `BLOB_READ_WRITE_TOKEN`).
 2. Add an `ADMIN_PASSWORD` environment variable.
 
 Until a ledger is published, the feed serves the starting ledger in `lib/seed-ledger.js`.
