@@ -708,3 +708,103 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Website Ledger tab */
+.ledger-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.ledger-sectors {
+  display: grid;
+  gap: 8px;
+}
+
+.ledger-sector {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 96px auto 36px;
+}
+
+.ledger-form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 12px;
+}
+
+.ledger-form label,
+.ledger-publish label {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.82rem;
+  font-weight: 600;
+  gap: 5px;
+}
+
+.ledger-form .span-2 {
+  grid-column: span 2;
+}
+
+#ledgerTab input[type="text"],
+#ledgerTab input[type="date"],
+#ledgerTab input[type="password"] {
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--ink);
+  min-height: 38px;
+  padding: 7px 9px;
+  width: 100%;
+}
+
+#ledgerTab input:focus {
+  border-color: var(--brand-maroon);
+  outline: 2px solid rgba(138, 10, 31, 0.18);
+  outline-offset: 0;
+}
+
+#ledgerHoldings input {
+  min-width: 110px;
+}
+
+.ledger-remove {
+  min-height: 34px;
+  padding: 4px 10px;
+}
+
+.ledger-publish {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.ledger-publish label {
+  min-width: 240px;
+}
+
+.ledger-errors {
+  color: var(--bad);
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 1050px) {
+  .ledger-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .ledger-form {
+    grid-template-columns: 1fr;
+  }
+
+  .ledger-form .span-2 {
+    grid-column: auto;
+  }
+}

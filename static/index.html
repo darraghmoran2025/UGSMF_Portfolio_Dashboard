@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="/styles.css" />
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
     <script src="/app.js" defer></script>
+    <script src="/ledger.js" defer></script>
   </head>
   <body>
     <header class="topbar">
@@ -67,6 +68,7 @@
         <button class="tab active" data-tab="portfolio">Portfolio Performance</button>
         <button class="tab" data-tab="live">Live Mode</button>
         <button class="tab" data-tab="options">Options Strategy</button>
+        <button class="tab" data-tab="ledger">Website Ledger</button>
       </nav>
 
       <section id="portfolioTab" class="tab-panel">
@@ -206,6 +208,83 @@
         <section class="panel wide">
           <h2>Risk Heatmap</h2>
           <div id="heatmapChart" class="chart"></div>
+        </section>
+      </section>
+
+      <section id="ledgerTab" class="tab-panel hidden">
+        <section class="panel wide">
+          <div class="panel-heading live-heading">
+            <div>
+              <h2>Website Ledger</h2>
+              <p id="ledgerStatus" class="subhead">Loading the published ledger…</p>
+            </div>
+            <div class="control-actions">
+              <button id="ledgerReload" type="button">Discard Changes</button>
+              <button id="ledgerPreview" type="button">Preview</button>
+            </div>
+          </div>
+          <p class="subhead">
+            Every sector is a fixed slice of the fund. When you add a stock to a sector, that sector's slice is
+            re-split across all the stocks it holds on the buy date (equally, unless you set a share). The other
+            sectors are untouched. Returns are benchmarked against the MSCI World Index.
+          </p>
+        </section>
+
+        <div class="ledger-grid">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Sector Allocation</h2>
+              <button id="ledgerAddSector" type="button">Add Sector</button>
+            </div>
+            <div id="ledgerSectors" class="ledger-sectors"></div>
+            <p id="ledgerSectorTotal" class="subhead"></p>
+          </section>
+
+          <section class="panel">
+            <h2>Record a Buy</h2>
+            <form id="ledgerAddForm" class="ledger-form">
+              <label>Ticker<input id="ledgerTicker" type="text" placeholder="e.g. MU, ALV.DE, 1211.HK" required /></label>
+              <label>Sector<select id="ledgerSector" required></select></label>
+              <label>Buy date<input id="ledgerDate" type="date" required /></label>
+              <label>Buy price<input id="ledgerPrice" type="number" min="0.0001" step="any" placeholder="Auto-fills from Yahoo" /></label>
+              <label class="span-2">Company<input id="ledgerCompany" type="text" placeholder="Auto-fills from Yahoo" /></label>
+              <p id="ledgerLookup" class="subhead span-2"></p>
+              <div class="control-actions span-2">
+                <button id="ledgerLookupButton" type="button">Look Up Price</button>
+                <button type="submit">Add Holding</button>
+              </div>
+            </form>
+          </section>
+        </div>
+
+        <section class="panel wide">
+          <h2>Holdings</h2>
+          <div class="table-wrap">
+            <table id="ledgerHoldings"></table>
+          </div>
+        </section>
+
+        <section id="ledgerPreviewPanel" class="panel wide hidden">
+          <h2>Preview</h2>
+          <section class="metrics" aria-label="Ledger preview">
+            <div class="metric"><span>Portfolio Return</span><strong id="ledgerPrevReturn">--</strong></div>
+            <div class="metric"><span>MSCI World</span><strong id="ledgerPrevBenchmark">--</strong></div>
+            <div class="metric"><span>Alpha</span><strong id="ledgerPrevAlpha">--</strong></div>
+            <div class="metric"><span>Since</span><strong id="ledgerPrevSince">--</strong></div>
+          </section>
+          <div class="table-wrap">
+            <table id="ledgerPreviewTable"></table>
+          </div>
+        </section>
+
+        <section class="panel wide">
+          <h2>Publish to Website</h2>
+          <form id="ledgerPublishForm" class="ledger-publish">
+            <label>Admin password<input id="ledgerPassword" type="password" autocomplete="current-password" required /></label>
+            <button type="submit">Publish</button>
+          </form>
+          <p id="ledgerPublishStatus" class="subhead"></p>
+          <ul id="ledgerErrors" class="ledger-errors"></ul>
         </section>
       </section>
     </main>

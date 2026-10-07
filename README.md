@@ -14,6 +14,40 @@ Streamlit and static dashboard for a Student Managed Fund portfolio. It includes
 - View return, contribution, volatility, and stock-level charts.
 - Build basic multi-leg options strategies and inspect payoff, Greeks, volatility stress, and risk heatmaps.
 
+## Website Ledger (feeds universityofgalwaysmf.com)
+
+The **Website Ledger** tab is where the fund records its paper trades. Whatever is published there drives the
+website's Performance-To-Date page and the live ticker bar at the top of every page.
+
+- **Sector allocation is fixed.** Each sector is a set slice of the fund (e.g. Financials 7%). Buying another
+  Financials stock re-splits that 7% across the Financials holdings on the buy date (equally, or by an optional
+  sector share). The other sectors are untouched.
+- **Record a buy** with ticker, sector, buy date and buy price. The price and company name auto-fill from the
+  Yahoo Finance close on that date. Use the exchange suffix for non-US listings (`ALV.DE`, `1211.HK`).
+- **Sells** are recorded with a sell date and price on the holding row; the sector's slice is re-split across
+  what remains.
+- **Benchmark** is the MSCI World Index (`^990100-USD-STRD`); alpha = portfolio return − MSCI World return
+  over the same period, from the first buy date.
+- **Preview** computes the result with live prices before anything is published. **Publish** needs the admin
+  password.
+
+API (Node functions in `api/`):
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/performance` | Public, CORS-enabled live performance feed used by the website (cached 60s). |
+| `POST /api/performance` | Preview a ledger without saving it. |
+| `GET /api/portfolio` | Current ledger. |
+| `PUT /api/portfolio` | Publish a ledger. Requires the `x-admin-password` header. |
+| `GET /api/price?symbol=&date=` | Close on a date plus live price, used for auto-fill. |
+
+Required Vercel setup for publishing:
+
+1. Create a Vercel Blob store and connect it to this project (adds `BLOB_READ_WRITE_TOKEN`).
+2. Add an `ADMIN_PASSWORD` environment variable.
+
+Until a ledger is published, the feed serves the starting ledger in `lib/seed-ledger.js`.
+
 ## Requirements
 
 - Python 3.11 or newer recommended

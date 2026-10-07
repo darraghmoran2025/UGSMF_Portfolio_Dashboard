@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "node scripts/build-static.mjs"
-  }
+    "build": "node scripts/build-static.mjs",
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.8.1"
+  },
+  "type": "module"
 }

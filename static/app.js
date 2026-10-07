@@ -1059,6 +1059,7 @@ function wireEvents() {
       $("portfolioTab").classList.toggle("hidden", button.dataset.tab !== "portfolio");
       $("liveTab").classList.toggle("hidden", button.dataset.tab !== "live");
       $("optionsTab").classList.toggle("hidden", button.dataset.tab !== "options");
+      $("ledgerTab").classList.toggle("hidden", button.dataset.tab !== "ledger");
       if (button.dataset.tab === "live" && !liveQuotes.size && !liveQuoteState.loading) {
         fetchLiveQuotes();
       }
