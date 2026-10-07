@@ -4,7 +4,7 @@ const SECTORS = [
   "Technology",
   "Healthcare",
   "Real Assets",
-  "Alternative Assets",
+  "Materials",
   "Financials",
 ];
 
@@ -17,8 +17,8 @@ const TICKER_TO_SECTOR = {
   VRTX: "Healthcare",
   WPM: "Real Assets",
   XOM: "Real Assets",
-  NEM: "Alternative Assets",
-  FCX: "Alternative Assets",
+  NEM: "Materials",
+  FCX: "Materials",
   BYD: "Consumer",
   BYDDF: "Consumer",
   PG: "Consumer",
